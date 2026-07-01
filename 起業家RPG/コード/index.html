@@ -759,14 +759,12 @@
 <script src="data/questions.js"></script>
 <script src="data/characters.js"></script>
 <script src="lib/diagnosis.js"></script>
+<!-- config.js はGit管理外（.gitignore）。config.example.js をコピーして値を設定してください -->
+<script src="config.js"></script>
 
 <script>
 // ========== Supabase設定 ==========
-// Supabaseでプロジェクト作成後、以下2つをプロジェクトの値に書き換えてください
-// （Project Settings → API に表示される Project URL と anon public key）
-const SUPABASE_URL      = 'https://rxfywgedrrtukdhdguxu.supabase.co';      // 例: https://xxxxxxxx.supabase.co
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4Znl3Z2VkcnJ0dWtkaGRndXh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MDU3NDcsImV4cCI6MjA5ODQ4MTc0N30.fyshmXzAGBqD9iRxPiBYJtg1HZAd40HYngCDYX4MpYQ';
-
+// SUPABASE_URL / SUPABASE_ANON_KEY は config.js（Git管理外）から読み込まれます
 let supabaseClient = null;
 if (SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY') {
   supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
