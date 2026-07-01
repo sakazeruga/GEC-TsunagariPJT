@@ -1,758 +1,479 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Founder Quest - 起業家RPG診断</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Cinzel:wght@700&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    /* ===== 基本リセット & スクロール設定 ===== */
-    *, *::before, *::after { box-sizing: border-box; }
-
-    html {
-      font-size: 16px;
-    }
-
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Noto Sans JP', sans-serif;
-      color: #fff;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) fixed;
-      /* スクロールはbodyで発生させる */
-      min-height: 100vh;
-      overflow-y: auto;
-      overflow-x: hidden;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    /* ===== 画面切り替え ===== */
-    .screen { display: none; }
-    .screen.active { display: block; }
-
-    /* ===== フォント ===== */
-    .font-rpg { font-family: 'Cinzel', serif; }
-
-    /* ===== 星パーティクル（固定・背景） ===== */
-    #stars {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      pointer-events: none;
-      z-index: 0;
-      overflow: hidden;
-    }
-    .star {
-      position: absolute;
-      width: 2px; height: 2px;
-      background: #fff;
-      border-radius: 50%;
-      animation: twinkle var(--dur, 3s) ease-in-out infinite var(--delay, 0s);
-      opacity: 0;
-    }
-    @keyframes twinkle {
-      0%, 100% { opacity: 0.15; transform: scale(1); }
-      50%       { opacity: 0.9;  transform: scale(1.6); }
-    }
-
-    /* ===== コンテンツを星の上に ===== */
-    .screen { position: relative; z-index: 1; }
-
-    /* ===== カード ===== */
-    .rpg-card {
-      background: rgba(255,255,255,0.07);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.14);
-      border-radius: 16px;
-    }
-    .rpg-card-gold {
-      background: rgba(255,215,0,0.08);
-      border: 1px solid rgba(255,215,0,0.3);
-      border-radius: 16px;
-    }
-
-    /* ===== ボタン ===== */
-    .btn-primary {
-      display: inline-block;
-      background: linear-gradient(135deg, #f6d365, #fda085);
-      color: #1a1a2e;
-      font-weight: 700;
-      font-family: 'Noto Sans JP', sans-serif;
-      font-size: 1.05rem;
-      border: none;
-      border-radius: 50px;
-      padding: 15px 28px;
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-      box-shadow: 0 4px 18px rgba(253,160,133,0.4);
-      -webkit-tap-highlight-color: transparent;
-    }
-    .btn-primary:hover  { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(253,160,133,0.5); }
-    .btn-primary:active { transform: scale(0.97); }
-    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-    .btn-secondary {
-      display: inline-block;
-      background: rgba(255,255,255,0.09);
-      color: #fff;
-      font-family: 'Noto Sans JP', sans-serif;
-      font-size: 0.93rem;
-      border: 1px solid rgba(255,255,255,0.28);
-      border-radius: 50px;
-      padding: 12px 22px;
-      cursor: pointer;
-      transition: background 0.2s;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .btn-secondary:hover  { background: rgba(255,255,255,0.18); }
-    .btn-secondary:active { background: rgba(255,255,255,0.25); }
-
-    /* ===== 進捗バー ===== */
-    .progress-bar  { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
-    .progress-fill { height: 100%; background: linear-gradient(90deg,#f6d365,#fda085); border-radius: 3px; transition: width 0.35s ease; }
-
-    /* ===== ステータスバー ===== */
-    .status-bar  { height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
-    .status-fill { height: 100%; border-radius: 4px; }
-
-    /* ===== 5段階評価ボタン ===== */
-    .scale-btn {
-      background: rgba(255,255,255,0.07);
-      border: 2px solid rgba(255,255,255,0.18);
-      color: #fff;
-      border-radius: 12px;
-      padding: 12px 6px;
-      cursor: pointer;
-      transition: all 0.18s;
-      text-align: center;
-      flex: 1;
-      font-family: 'Noto Sans JP', sans-serif;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .scale-btn:hover, .scale-btn.selected {
-      background: linear-gradient(135deg,rgba(246,211,101,0.28),rgba(253,160,133,0.28));
-      border-color: #fda085;
-    }
-    .scale-btn.selected { border-color: #f6d365; }
-
-    /* ===== 選択肢ボタン ===== */
-    .choice-btn {
-      display: block;
-      width: 100%;
-      background: rgba(255,255,255,0.05);
-      border: 2px solid rgba(255,255,255,0.14);
-      color: #fff;
-      border-radius: 12px;
-      padding: 15px 18px;
-      cursor: pointer;
-      text-align: left;
-      font-family: 'Noto Sans JP', sans-serif;
-      font-size: 0.95rem;
-      transition: all 0.18s;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .choice-btn:hover, .choice-btn.selected {
-      background: linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.18));
-      border-color: #fda085;
-    }
-
-    /* ===== テキスト入力 ===== */
-    .rpg-input {
-      width: 100%;
-      background: rgba(255,255,255,0.07);
-      border: 2px solid rgba(255,255,255,0.18);
-      border-radius: 12px;
-      color: #fff;
-      font-family: 'Noto Sans JP', sans-serif;
-      font-size: 1rem;
-      padding: 13px 16px;
-      transition: border-color 0.2s;
-    }
-    .rpg-input:focus { outline: none; border-color: #f6d365; }
-    .rpg-input::placeholder { color: rgba(255,255,255,0.38); }
-
-    .rpg-textarea {
-      width: 100%;
-      min-height: 100px;
-      background: rgba(255,255,255,0.07);
-      border: 2px solid rgba(255,255,255,0.18);
-      border-radius: 12px;
-      color: #fff;
-      font-family: 'Noto Sans JP', sans-serif;
-      font-size: 0.93rem;
-      padding: 13px 16px;
-      resize: vertical;
-      transition: border-color 0.2s;
-    }
-    .rpg-textarea:focus { outline: none; border-color: #f6d365; }
-    .rpg-textarea::placeholder { color: rgba(255,255,255,0.38); }
-
-    /* ===== チップ・ラジオ ===== */
-    .interest-chip {
-      background: rgba(255,255,255,0.05);
-      border: 2px solid rgba(255,255,255,0.18);
-      color: rgba(255,255,255,0.7);
-      border-radius: 50px;
-      padding: 7px 15px;
-      font-family: 'Noto Sans JP', sans-serif;
-      font-size: 0.84rem;
-      cursor: pointer;
-      transition: all 0.18s;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .interest-chip.selected {
-      background: linear-gradient(135deg,rgba(246,211,101,0.28),rgba(253,160,133,0.28));
-      border-color: #f6d365;
-      color: #fff;
-    }
-
-    .radio-option {
-      display: block;
-      width: 100%;
-      background: rgba(255,255,255,0.05);
-      border: 2px solid rgba(255,255,255,0.14);
-      color: rgba(255,255,255,0.8);
-      border-radius: 10px;
-      padding: 11px 15px;
-      font-family: 'Noto Sans JP', sans-serif;
-      font-size: 0.9rem;
-      cursor: pointer;
-      text-align: left;
-      transition: all 0.18s;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .radio-option:hover, .radio-option.selected {
-      border-color: #f6d365;
-      color: #fff;
-      background: rgba(246,211,101,0.1);
-    }
-
-    /* ===== アニメーション ===== */
-    @keyframes charReveal {
-      0%   { opacity: 0; transform: scale(0.5) translateY(30px); }
-      60%  { transform: scale(1.1) translateY(-5px); }
-      100% { opacity: 1; transform: scale(1) translateY(0); }
-    }
-    .char-reveal { animation: charReveal 1s cubic-bezier(0.175,0.885,0.32,1.275) forwards; }
-
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .fade-in-up { animation: fadeInUp 0.6s ease forwards; }
-
-    @keyframes glow {
-      0%,100% { box-shadow: 0 0 20px rgba(246,211,101,0.3); }
-      50%      { box-shadow: 0 0 42px rgba(246,211,101,0.65), 0 0 60px rgba(253,160,133,0.28); }
-    }
-    .glow-pulse { animation: glow 2s ease-in-out infinite; }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .loading-ring {
-      width: 80px; height: 80px;
-      border: 4px solid rgba(255,255,255,0.1);
-      border-top-color: #f6d365;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes pulse2 { 0%,100% { opacity:1; } 50% { opacity:0.45; } }
-    .pulse { animation: pulse2 1.5s ease-in-out infinite; }
-
-    @keyframes float {
-      0%,100% { transform: translateY(0); }
-      50%      { transform: translateY(-10px); }
-    }
-    .float { animation: float 3s ease-in-out infinite; }
-
-    @keyframes magicCircle {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(360deg); }
-    }
-    .magic-circle {
-      position: absolute;
-      border-radius: 50%;
-      border: 2px solid rgba(246,211,101,0.25);
-      animation: magicCircle 4s linear infinite;
-    }
-    .magic-circle-2 {
-      border-color: rgba(253,160,133,0.25);
-      animation: magicCircle 3s linear infinite reverse;
-    }
-
-    /* ===== 吹き出し ===== */
-    .speech-bubble {
-      position: relative;
-      background: rgba(246,211,101,0.13);
-      border: 2px solid rgba(246,211,101,0.5);
-      border-radius: 12px;
-      padding: 11px 15px;
-    }
-    .speech-bubble::after {
-      content: '';
-      position: absolute;
-      bottom: -11px; left: 50%;
-      transform: translateX(-50%);
-      border: 6px solid transparent;
-      border-top-color: rgba(246,211,101,0.5);
-    }
-
-    /* ===== キャラ大文字 ===== */
-    .char-big { font-size: 7rem; line-height: 1; }
-    @media (max-width: 480px) { .char-big { font-size: 5.5rem; } }
-
-    /* ===== スクロールバー ===== */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Founder Quest - GEC起業家診断</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Barlow:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+html{font-size:16px}
+body{margin:0;padding:0;font-family:'Noto Sans JP',sans-serif;color:#fff;background:#06091a;min-height:100vh;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.screen{display:none;position:relative;z-index:1}
+.screen.active{display:block}
+/* GEC Background */
+#gec-bg{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden}
+.gec-grad{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(160deg,#06091a 0%,#08122a 40%,#0a1e3d 70%,#06091a 100%)}
+.gec-glow1{position:absolute;top:-15%;right:-10%;width:70%;height:70%;background:radial-gradient(ellipse,rgba(37,99,235,0.28) 0%,rgba(6,182,212,0.1) 40%,transparent 70%);border-radius:50%}
+.gec-glow2{position:absolute;bottom:-10%;left:-5%;width:55%;height:55%;background:radial-gradient(ellipse,rgba(37,99,235,0.15) 0%,transparent 65%);border-radius:50%}
+.gec-hex{position:absolute;top:5%;right:0;width:45%;height:90%;opacity:0.15;background-image:radial-gradient(circle,rgba(96,165,250,0.5) 1px,transparent 1px);background-size:24px 24px}
+/* Particles */
+.particle{position:absolute;border-radius:50%;animation:ptw 4s ease-in-out infinite;opacity:0}
+@keyframes ptw{0%,100%{opacity:0.08;transform:scale(1)}50%{opacity:0.5;transform:scale(1.4)}}
+/* GEC Logo */
+.gec-logo{display:flex;align-items:center;gap:10px}
+.gec-logo-mark{display:grid;grid-template-columns:1fr 1fr;gap:3px;width:28px;height:28px}
+.gec-logo-mark span{display:block;background:#fff;border-radius:2px}
+.gec-logo-text{font-family:'Barlow',sans-serif;font-weight:800;font-size:1.4rem;letter-spacing:0.08em;color:#fff;line-height:1}
+.gec-logo-sub{font-size:0.48rem;letter-spacing:0.15em;color:rgba(255,255,255,0.55);font-weight:600;margin-top:2px}
+/* Header */
+.gec-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 12px;position:relative;z-index:2}
+.header-badge{font-size:0.65rem;font-weight:700;letter-spacing:0.15em;color:#60a5fa;text-transform:uppercase;background:rgba(37,99,235,0.15);border:1px solid rgba(96,165,250,0.3);border-radius:20px;padding:4px 10px}
+/* Cards */
+.gec-card{background:rgba(255,255,255,0.05);backdrop-filter:blur(10px);border:1px solid rgba(96,165,250,0.15);border-radius:16px}
+.gec-card-blue{background:rgba(37,99,235,0.12);border:1px solid rgba(96,165,250,0.3);border-radius:16px}
+/* Buttons */
+.btn-primary{display:inline-block;background:linear-gradient(135deg,#1d4ed8,#3b82f6);color:#fff;font-weight:700;font-family:'Noto Sans JP',sans-serif;font-size:1rem;border:none;border-radius:50px;padding:14px 28px;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 4px 20px rgba(59,130,246,0.4);-webkit-tap-highlight-color:transparent}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 6px 28px rgba(59,130,246,0.55)}
+.btn-primary:active{transform:scale(0.97)}
+.btn-primary:disabled{opacity:0.45;cursor:not-allowed;transform:none}
+.btn-secondary{display:inline-block;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);font-family:'Noto Sans JP',sans-serif;font-size:0.93rem;border:1px solid rgba(96,165,250,0.25);border-radius:50px;padding:12px 22px;cursor:pointer;transition:background 0.2s;-webkit-tap-highlight-color:transparent}
+.btn-secondary:hover{background:rgba(59,130,246,0.15)}
+.btn-secondary:active{background:rgba(59,130,246,0.22)}
+/* Progress */
+.progress-bar{height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#1d4ed8,#60a5fa);border-radius:3px;transition:width 0.35s ease}
+.status-bar{height:7px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden}
+.status-fill{height:100%;border-radius:4px}
+/* Scale buttons */
+.scale-btn{background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.12);color:#fff;border-radius:12px;padding:12px 4px;cursor:pointer;transition:all 0.18s;text-align:center;flex:1;font-family:'Noto Sans JP',sans-serif;-webkit-tap-highlight-color:transparent}
+.scale-btn:hover,.scale-btn.selected{background:rgba(37,99,235,0.25);border-color:#3b82f6}
+.scale-btn.selected{border-color:#60a5fa}
+.choice-btn{display:block;width:100%;background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.1);color:#fff;border-radius:12px;padding:14px 18px;cursor:pointer;text-align:left;font-family:'Noto Sans JP',sans-serif;font-size:0.93rem;transition:all 0.18s;-webkit-tap-highlight-color:transparent}
+.choice-btn:hover,.choice-btn.selected{background:rgba(37,99,235,0.2);border-color:#3b82f6}
+/* Inputs */
+.rpg-input{width:100%;background:rgba(255,255,255,0.06);border:1.5px solid rgba(96,165,250,0.25);border-radius:12px;color:#fff;font-family:'Noto Sans JP',sans-serif;font-size:1rem;padding:13px 16px;transition:border-color 0.2s}
+.rpg-input:focus{outline:none;border-color:#3b82f6}
+.rpg-input::placeholder{color:rgba(255,255,255,0.3)}
+.rpg-textarea{width:100%;min-height:100px;background:rgba(255,255,255,0.06);border:1.5px solid rgba(96,165,250,0.25);border-radius:12px;color:#fff;font-family:'Noto Sans JP',sans-serif;font-size:0.93rem;padding:13px 16px;resize:vertical;transition:border-color 0.2s}
+.rpg-textarea:focus{outline:none;border-color:#3b82f6}
+.rpg-textarea::placeholder{color:rgba(255,255,255,0.3)}
+/* Chips */
+.interest-chip{background:rgba(255,255,255,0.04);border:1.5px solid rgba(96,165,250,0.2);color:rgba(255,255,255,0.65);border-radius:50px;padding:7px 15px;font-family:'Noto Sans JP',sans-serif;font-size:0.82rem;cursor:pointer;transition:all 0.18s;-webkit-tap-highlight-color:transparent}
+.interest-chip.selected{background:rgba(37,99,235,0.25);border-color:#60a5fa;color:#fff}
+.radio-option{display:block;width:100%;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.75);border-radius:10px;padding:11px 15px;font-family:'Noto Sans JP',sans-serif;font-size:0.9rem;cursor:pointer;text-align:left;transition:all 0.18s;-webkit-tap-highlight-color:transparent}
+.radio-option:hover,.radio-option.selected{border-color:#60a5fa;color:#fff;background:rgba(37,99,235,0.15)}
+/* Animations */
+@keyframes charReveal{0%{opacity:0;transform:scale(0.5) translateY(30px)}60%{transform:scale(1.1) translateY(-5px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+.char-reveal{animation:charReveal 1s cubic-bezier(0.175,0.885,0.32,1.275) forwards}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.fade-in-up{animation:fadeInUp 0.6s ease forwards}
+@keyframes blueGlow{0%,100%{box-shadow:0 0 20px rgba(59,130,246,0.3)}50%{box-shadow:0 0 42px rgba(59,130,246,0.65),0 0 60px rgba(6,182,212,0.2)}}
+.glow-pulse{animation:blueGlow 2.2s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-ring{width:80px;height:80px;border:4px solid rgba(255,255,255,0.08);border-top-color:#3b82f6;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes pulse2{0%,100%{opacity:1}50%{opacity:0.4}}
+.pulse{animation:pulse2 1.5s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.float{animation:float 3s ease-in-out infinite}
+@keyframes magicCircle{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.magic-circle{position:absolute;border-radius:50%;border:2px solid rgba(59,130,246,0.25);animation:magicCircle 4s linear infinite}
+.magic-circle-2{border-color:rgba(6,182,212,0.2);animation:magicCircle 3s linear infinite reverse}
+/* Speech bubble */
+.speech-bubble{position:relative;background:rgba(37,99,235,0.15);border:1.5px solid rgba(96,165,250,0.4);border-radius:12px;padding:11px 15px}
+.speech-bubble::after{content:'';position:absolute;bottom:-11px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:rgba(96,165,250,0.4)}
+/* Char big */
+.char-big{font-size:7rem;line-height:1}
+@media(max-width:480px){.char-big{font-size:5.5rem}}
+/* Section divider */
+.sec-chip{font-size:0.72rem;font-weight:700;letter-spacing:0.12em;color:#60a5fa;background:rgba(37,99,235,0.15);border:1px solid rgba(96,165,250,0.25);border-radius:20px;padding:4px 14px;display:inline-block}
+/* Accent text */
+.text-accent{color:#60a5fa}
+.text-dim{color:rgba(255,255,255,0.45)}
+.text-sm-dim{color:rgba(255,255,255,0.5);font-size:0.82rem}
+.hidden{display:none!important}
+/* Scrollbar */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(96,165,250,0.3);border-radius:2px}
+/* Divider line */
+.gec-divider{height:1px;background:linear-gradient(90deg,transparent,rgba(96,165,250,0.3),transparent);margin:16px 0}
+/* Stat label */
+.stat-label{font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.4)}
+/* wave line decoration */
+.wave-line{position:absolute;top:0;right:0;width:100%;height:220px;overflow:hidden;pointer-events:none;z-index:0}
+</style>
 </head>
 <body>
 
-<!-- 星背景 -->
-<div id="stars"></div>
+<div id="gec-bg">
+<div class="gec-grad"></div>
+<div class="gec-glow1"></div>
+<div class="gec-glow2"></div>
+<div class="gec-hex"></div>
+</div>
 
 <!-- ========================================================
-     SCREEN 1: トップページ
+     SCREEN 1: トップ
 ======================================================== -->
 <div id="screen-top" class="screen active">
-  <div class="max-w-md mx-auto px-5 py-12 text-center">
-    <div class="mb-5">
-      <div style="font-size:3.5rem" class="mb-3">⚔️✨</div>
-      <h1 class="font-rpg text-3xl font-bold text-yellow-400 tracking-wider mb-1">FOUNDER QUEST</h1>
-      <div class="text-xs text-yellow-500 tracking-widest opacity-70">起業家RPG診断</div>
-    </div>
-
-    <div class="mb-7">
-      <h2 class="text-2xl font-bold leading-snug mb-3">
-        あなたの起業家タイプが、<br><span class="text-yellow-400">RPGキャラ</span>になる。
-      </h2>
-      <p class="text-sm text-gray-400 leading-relaxed">
-        起業家としての強み・弱み・仲間との相性を、<br>ゲームのように楽しく理解できる診断。
-      </p>
-    </div>
-
-    <!-- キャラ一覧 -->
-    <div class="rpg-card p-5 mb-7">
-      <div class="grid grid-cols-4 gap-3 mb-3">
-        <div class="text-center"><div class="text-3xl mb-1">⚔️</div><div class="text-xs text-gray-400">勇者</div></div>
-        <div class="text-center"><div class="text-3xl mb-1">🛡️</div><div class="text-xs text-gray-400">戦士</div></div>
-        <div class="text-center"><div class="text-3xl mb-1">🙏</div><div class="text-xs text-gray-400">僧侶</div></div>
-        <div class="text-center"><div class="text-3xl mb-1">🔮</div><div class="text-xs text-gray-400">魔法使い</div></div>
-        <div class="text-center"><div class="text-3xl mb-1">🗡️</div><div class="text-xs text-gray-400">盗賊</div></div>
-        <div class="text-center"><div class="text-3xl mb-1">💰</div><div class="text-xs text-gray-400">商人</div></div>
-        <div class="text-center"><div class="text-3xl mb-1">🧠</div><div class="text-xs text-gray-400">軍師</div></div>
-        <div class="text-center"><div class="text-3xl mb-1">✨</div><div class="text-xs text-gray-400">召喚士</div></div>
-      </div>
-      <p class="text-xs text-gray-400">あなたはどのキャラ？</p>
-    </div>
-
-    <button class="btn-primary w-full mb-4" onclick="goTo('start')">⚔️ 無料で診断する</button>
-    <div class="flex justify-center gap-4 text-xs text-gray-500">
-      <span>⏱ 約5〜7分</span>
-      <span>🔐 登録不要</span>
-      <span>💡 起業経験なしでもOK</span>
-    </div>
-  </div>
+<div class="gec-header">
+<div class="gec-logo"><div class="gec-logo-mark"><span></span><span></span><span></span><span></span></div><div><div class="gec-logo-text">GEC</div><div class="gec-logo-sub">GLOBIS ENTREPRENEURS CLUB</div></div></div>
+<span class="header-badge">診断 β</span>
+</div>
+<div style="max-width:440px;margin:0 auto;padding:20px 20px 60px">
+<div style="text-align:center;padding:20px 0 30px">
+<div style="font-family:'Barlow',sans-serif;font-weight:800;font-size:2rem;letter-spacing:0.1em;color:#fff;margin-bottom:4px">FOUNDER QUEST</div>
+<div class="sec-chip" style="margin-bottom:24px">起業家タイプ診断</div>
+<h2 style="font-size:1.5rem;font-weight:900;line-height:1.5;margin-bottom:12px">あなたの起業家タイプが、<br><span class="text-accent">RPGキャラ</span>になる。</h2>
+<p style="font-size:0.88rem;color:rgba(255,255,255,0.5);line-height:1.8">起業家としての強み・弱み・仲間との相性を、<br>ゲームのように楽しく理解できる診断。</p>
+</div>
+<div class="gec-card" style="padding:20px;margin-bottom:28px">
+<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;color:#60a5fa;margin-bottom:14px">8つの起業家タイプ</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+<div style="text-align:center"><div style="font-size:1.8rem;margin-bottom:4px">⚔️</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.5)">勇者</div></div>
+<div style="text-align:center"><div style="font-size:1.8rem;margin-bottom:4px">🛡️</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.5)">戦士</div></div>
+<div style="text-align:center"><div style="font-size:1.8rem;margin-bottom:4px">🙏</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.5)">僧侶</div></div>
+<div style="text-align:center"><div style="font-size:1.8rem;margin-bottom:4px">🔮</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.5)">魔法使い</div></div>
+<div style="text-align:center"><div style="font-size:1.8rem;margin-bottom:4px">🗡️</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.5)">盗賊</div></div>
+<div style="text-align:center"><div style="font-size:1.8rem;margin-bottom:4px">💰</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.5)">商人</div></div>
+<div style="text-align:center"><div style="font-size:1.8rem;margin-bottom:4px">🧠</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.5)">軍師</div></div>
+<div style="text-align:center"><div style="font-size:1.8rem;margin-bottom:4px">✨</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.5)">召喚士</div></div>
+</div>
+</div>
+<button class="btn-primary" style="width:100%;margin-bottom:16px;font-size:1.05rem;padding:16px" onclick="goTo('start')">無料で診断する</button>
+<div style="display:flex;justify-content:center;gap:20px;font-size:0.75rem;color:rgba(255,255,255,0.35)">
+<span>⏱ 約5〜7分</span><span>🔐 登録不要</span><span>💡 経験不問</span>
+</div>
+</div>
 </div>
 
 <!-- ========================================================
      SCREEN 2: 診断開始
 ======================================================== -->
 <div id="screen-start" class="screen">
-  <div class="max-w-md mx-auto px-5 py-10">
-    <div class="text-center mb-7">
-      <div class="text-4xl mb-3">🗺️</div>
-      <h2 class="text-2xl font-bold text-yellow-400 mb-1">起業家RPG診断を</h2>
-      <h2 class="text-2xl font-bold mb-3">開始します</h2>
-      <p class="text-sm text-gray-400">40問に答えると、あなたの起業家キャラが分かります。</p>
-    </div>
-
-    <div class="rpg-card p-5 mb-5">
-      <h3 class="text-yellow-400 font-bold text-sm mb-4">🏆 診断でわかること</h3>
-      <div class="space-y-3">
-        <div class="flex items-start gap-3"><span class="text-xl">⚔️</span><div><div class="text-sm font-bold">あなたのキャラタイプ</div><div class="text-xs text-gray-400">8種類の起業家RPGキャラに分類</div></div></div>
-        <div class="flex items-start gap-3"><span class="text-xl">💪</span><div><div class="text-sm font-bold">起業家としての強み</div><div class="text-xs text-gray-400">8パラメータで詳しく表示</div></div></div>
-        <div class="flex items-start gap-3"><span class="text-xl">🌱</span><div><div class="text-sm font-bold">伸びしろ</div><div class="text-xs text-gray-400">成長のヒントを提案</div></div></div>
-        <div class="flex items-start gap-3"><span class="text-xl">🤝</span><div><div class="text-sm font-bold">相性の良い仲間</div><div class="text-xs text-gray-400">チームを組むべきキャラが分かる</div></div></div>
-        <div class="flex items-start gap-3"><span class="text-xl">🎯</span><div><div class="text-sm font-bold">初回クエスト</div><div class="text-xs text-gray-400">今すぐ取り組める行動提案</div></div></div>
-      </div>
-    </div>
-
-    <div class="rpg-card-gold p-4 mb-7">
-      <p class="text-yellow-300 text-sm text-center">💡 正解はありません。<br>直感で答えてください。</p>
-    </div>
-
-    <div class="flex gap-3">
-      <button class="btn-secondary flex-1" onclick="goTo('top')">← 戻る</button>
-      <button class="btn-primary" style="flex:2" onclick="goTo('profile')">診断を始める →</button>
-    </div>
-  </div>
+<div class="gec-header"><div class="gec-logo"><div class="gec-logo-mark"><span></span><span></span><span></span><span></span></div><div><div class="gec-logo-text">GEC</div><div class="gec-logo-sub">GLOBIS ENTREPRENEURS CLUB</div></div></div></div>
+<div style="max-width:440px;margin:0 auto;padding:12px 20px 60px">
+<div style="text-align:center;margin-bottom:28px">
+<div class="sec-chip" style="margin-bottom:16px">診断について</div>
+<h2 style="font-size:1.4rem;font-weight:900;margin-bottom:8px">Founder Questを<br>開始します</h2>
+<p style="font-size:0.85rem;color:rgba(255,255,255,0.45)">40問に答えると、あなたの起業家キャラが分かります。</p>
+</div>
+<div class="gec-card" style="padding:20px;margin-bottom:16px">
+<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;color:#60a5fa;margin-bottom:14px">診断でわかること</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;align-items:flex-start;gap:12px"><span style="font-size:1.4rem">⚔️</span><div><div style="font-size:0.9rem;font-weight:700;margin-bottom:2px">あなたのキャラタイプ</div><div style="font-size:0.78rem;color:rgba(255,255,255,0.45)">8種類の起業家RPGキャラに分類</div></div></div>
+<div style="display:flex;align-items:flex-start;gap:12px"><span style="font-size:1.4rem">💪</span><div><div style="font-size:0.9rem;font-weight:700;margin-bottom:2px">起業家としての強み</div><div style="font-size:0.78rem;color:rgba(255,255,255,0.45)">8パラメータで詳しく表示</div></div></div>
+<div style="display:flex;align-items:flex-start;gap:12px"><span style="font-size:1.4rem">🌱</span><div><div style="font-size:0.9rem;font-weight:700;margin-bottom:2px">伸びしろ</div><div style="font-size:0.78rem;color:rgba(255,255,255,0.45)">成長のヒントを提案</div></div></div>
+<div style="display:flex;align-items:flex-start;gap:12px"><span style="font-size:1.4rem">🤝</span><div><div style="font-size:0.9rem;font-weight:700;margin-bottom:2px">相性の良い仲間</div><div style="font-size:0.78rem;color:rgba(255,255,255,0.45)">チームを組むべきキャラが分かる</div></div></div>
+<div style="display:flex;align-items:flex-start;gap:12px"><span style="font-size:1.4rem">🎯</span><div><div style="font-size:0.9rem;font-weight:700;margin-bottom:2px">初回クエスト</div><div style="font-size:0.78rem;color:rgba(255,255,255,0.45)">今すぐ取り組める行動提案</div></div></div>
+</div>
+</div>
+<div class="gec-card-blue" style="padding:14px;margin-bottom:28px;text-align:center">
+<p style="color:#93c5fd;font-size:0.88rem">正解はありません。直感で答えてください。</p>
+</div>
+<div style="display:flex;gap:10px">
+<button class="btn-secondary" style="flex:1" onclick="goTo('top')">← 戻る</button>
+<button class="btn-primary" style="flex:2" onclick="goTo('profile')">診断を始める →</button>
+</div>
+</div>
 </div>
 
 <!-- ========================================================
      SCREEN 3: 基本情報入力
 ======================================================== -->
 <div id="screen-profile" class="screen">
-  <div class="max-w-md mx-auto px-5 py-10">
-    <div class="text-center mb-7">
-      <div class="text-3xl mb-2">👤</div>
-      <h2 class="text-xl font-bold">あなたのことを教えてください</h2>
-      <p class="text-xs text-gray-400 mt-1">診断結果に表示されます</p>
-    </div>
-
-    <!-- ニックネーム -->
-    <div class="mb-6">
-      <label class="block text-yellow-400 text-sm font-bold mb-2">ニックネーム <span class="text-red-400">*</span></label>
-      <input type="text" id="nickname-input" class="rpg-input" placeholder="例：ショウジ" maxlength="20">
-      <p class="text-xs text-gray-500 mt-1">結果画面で使用します（最大20文字）</p>
-    </div>
-
-    <!-- 起業経験 -->
-    <div class="mb-6">
-      <label class="block text-yellow-400 text-sm font-bold mb-2">起業経験 <span class="text-gray-500 text-xs">（任意）</span></label>
-      <div class="space-y-2" id="stage-options">
-        <button class="radio-option" data-value="interested" onclick="selectStage(this)">🌟 起業に興味がある</button>
-        <button class="radio-option" data-value="preparing"  onclick="selectStage(this)">📝 起業準備中</button>
-        <button class="radio-option" data-value="side"       onclick="selectStage(this)">💼 副業・個人活動をしている</button>
-        <button class="radio-option" data-value="founded"    onclick="selectStage(this)">🚀 すでに起業している</button>
-        <button class="radio-option" data-value="corporate"  onclick="selectStage(this)">🏢 新規事業に関わっている</button>
-      </div>
-    </div>
-
-    <!-- 関心テーマ -->
-    <div class="mb-8">
-      <label class="block text-yellow-400 text-sm font-bold mb-2">関心テーマ <span class="text-gray-500 text-xs">（任意・複数可）</span></label>
-      <div class="flex flex-wrap gap-2" id="interest-chips">
-        <button class="interest-chip" onclick="toggleInterest(this)" data-value="education">📚 教育</button>
-        <button class="interest-chip" onclick="toggleInterest(this)" data-value="local">🏘️ 地域</button>
-        <button class="interest-chip" onclick="toggleInterest(this)" data-value="tech">💻 テクノロジー</button>
-        <button class="interest-chip" onclick="toggleInterest(this)" data-value="health">🏥 医療・福祉</button>
-        <button class="interest-chip" onclick="toggleInterest(this)" data-value="env">🌿 環境</button>
-        <button class="interest-chip" onclick="toggleInterest(this)" data-value="community">👥 コミュニティ</button>
-        <button class="interest-chip" onclick="toggleInterest(this)" data-value="ent">🎭 エンタメ</button>
-        <button class="interest-chip" onclick="toggleInterest(this)" data-value="food">🍽️ 食</button>
-        <button class="interest-chip" onclick="toggleInterest(this)" data-value="work">💡 働き方</button>
-        <button class="interest-chip" onclick="toggleInterest(this)" data-value="undecided">❓ まだ決まっていない</button>
-      </div>
-    </div>
-
-    <div class="flex gap-3">
-      <button class="btn-secondary flex-1" onclick="goTo('start')">← 戻る</button>
-      <button class="btn-primary" style="flex:2" onclick="startSurvey()">診断を開始 →</button>
-    </div>
-  </div>
+<div class="gec-header"><div class="gec-logo"><div class="gec-logo-mark"><span></span><span></span><span></span><span></span></div><div><div class="gec-logo-text">GEC</div><div class="gec-logo-sub">GLOBIS ENTREPRENEURS CLUB</div></div></div></div>
+<div style="max-width:440px;margin:0 auto;padding:12px 20px 60px">
+<div style="text-align:center;margin-bottom:24px">
+<div class="sec-chip" style="margin-bottom:12px">プロフィール</div>
+<h2 style="font-size:1.3rem;font-weight:900">あなたのことを教えてください</h2>
+<p style="font-size:0.78rem;color:rgba(255,255,255,0.4);margin-top:4px">診断結果に表示されます</p>
+</div>
+<div style="margin-bottom:22px">
+<label style="display:block;font-size:0.82rem;font-weight:700;color:#60a5fa;margin-bottom:8px">ニックネーム <span style="color:#f87171">*</span></label>
+<input type="text" id="nickname-input" class="rpg-input" placeholder="例：ショウジ" maxlength="20">
+<p style="font-size:0.72rem;color:rgba(255,255,255,0.3);margin-top:5px">結果画面で使用します（最大20文字）</p>
+</div>
+<div style="margin-bottom:22px">
+<label style="display:block;font-size:0.82rem;font-weight:700;color:#60a5fa;margin-bottom:8px">起業経験 <span style="font-size:0.72rem;color:rgba(255,255,255,0.35);font-weight:400">（任意）</span></label>
+<div style="display:flex;flex-direction:column;gap:8px" id="stage-options">
+<button class="radio-option" data-value="interested" onclick="selectStage(this)">起業に興味がある</button>
+<button class="radio-option" data-value="preparing" onclick="selectStage(this)">起業準備中</button>
+<button class="radio-option" data-value="side" onclick="selectStage(this)">副業・個人活動をしている</button>
+<button class="radio-option" data-value="founded" onclick="selectStage(this)">すでに起業している</button>
+<button class="radio-option" data-value="corporate" onclick="selectStage(this)">新規事業に関わっている</button>
+</div>
+</div>
+<div style="margin-bottom:32px">
+<label style="display:block;font-size:0.82rem;font-weight:700;color:#60a5fa;margin-bottom:8px">関心テーマ <span style="font-size:0.72rem;color:rgba(255,255,255,0.35);font-weight:400">（任意・複数可）</span></label>
+<div style="display:flex;flex-wrap:wrap;gap:8px" id="interest-chips">
+<button class="interest-chip" onclick="toggleInterest(this)" data-value="education">教育</button>
+<button class="interest-chip" onclick="toggleInterest(this)" data-value="local">地域</button>
+<button class="interest-chip" onclick="toggleInterest(this)" data-value="tech">テクノロジー</button>
+<button class="interest-chip" onclick="toggleInterest(this)" data-value="health">医療・福祉</button>
+<button class="interest-chip" onclick="toggleInterest(this)" data-value="env">環境</button>
+<button class="interest-chip" onclick="toggleInterest(this)" data-value="community">コミュニティ</button>
+<button class="interest-chip" onclick="toggleInterest(this)" data-value="ent">エンタメ</button>
+<button class="interest-chip" onclick="toggleInterest(this)" data-value="food">食</button>
+<button class="interest-chip" onclick="toggleInterest(this)" data-value="work">働き方</button>
+<button class="interest-chip" onclick="toggleInterest(this)" data-value="undecided">まだ決まっていない</button>
+</div>
+</div>
+<div style="display:flex;gap:10px">
+<button class="btn-secondary" style="flex:1" onclick="goTo('start')">← 戻る</button>
+<button class="btn-primary" style="flex:2" onclick="startSurvey()">診断を開始 →</button>
+</div>
+</div>
 </div>
 
 <!-- ========================================================
      SCREEN 4: サーベイ
 ======================================================== -->
 <div id="screen-survey" class="screen">
-  <div class="max-w-md mx-auto px-4 py-6">
-
-    <!-- 進捗ヘッダー -->
-    <div class="mb-5">
-      <div class="flex justify-between items-center mb-2">
-        <span class="text-yellow-400 text-sm font-bold" id="q-counter">Q1 / 40</span>
-        <button class="text-gray-500 text-xs" onclick="goSurveyBack()">← 前の問</button>
-      </div>
-      <div class="progress-bar">
-        <div class="progress-fill" id="survey-progress" style="width:0%"></div>
-      </div>
-    </div>
-
-    <!-- セクション -->
-    <div class="text-center mb-5">
-      <span class="text-xs text-gray-400 bg-white/10 px-3 py-1 rounded-full" id="q-section">ビジョン力</span>
-    </div>
-
-    <!-- 設問カード -->
-    <div class="rpg-card p-5 mb-5">
-      <div class="text-gray-400 text-xs mb-3" id="q-type-label">あなたの度合いを選んでください</div>
-      <p class="text-white font-bold leading-relaxed mb-5" style="font-size:1.05rem" id="q-text">設問テキスト</p>
-
-      <!-- 5段階評価 -->
-      <div id="answer-scale" class="hidden">
-        <div class="flex gap-2">
-          <button class="scale-btn" data-val="1" onclick="selectScale(this)"><div class="text-xl mb-1">😞</div><div class="text-xs">まったく<br>当てはまらない</div></button>
-          <button class="scale-btn" data-val="2" onclick="selectScale(this)"><div class="text-xl mb-1">🙁</div><div class="text-xs">あまり<br>当てはまらない</div></button>
-          <button class="scale-btn" data-val="3" onclick="selectScale(this)"><div class="text-xl mb-1">😐</div><div class="text-xs">どちらとも<br>いえない</div></button>
-          <button class="scale-btn" data-val="4" onclick="selectScale(this)"><div class="text-xl mb-1">😊</div><div class="text-xs">やや<br>当てはまる</div></button>
-          <button class="scale-btn" data-val="5" onclick="selectScale(this)"><div class="text-xl mb-1">😄</div><div class="text-xs">とても<br>当てはまる</div></button>
-        </div>
-      </div>
-
-      <!-- 4択 -->
-      <div id="answer-choice" class="hidden space-y-2"></div>
-
-      <!-- 自由記述 -->
-      <div id="answer-text" class="hidden">
-        <textarea class="rpg-textarea" id="free-text-input" placeholder="自由に入力してください（スキップ可）"></textarea>
-      </div>
-    </div>
-
-    <!-- ナビボタン -->
-    <div class="flex gap-3">
-      <button class="btn-secondary flex-1" id="survey-back-btn" onclick="goSurveyBack()">← 前へ</button>
-      <button class="btn-primary" style="flex:2" id="survey-next-btn" onclick="goSurveyNext()" disabled>次へ →</button>
-    </div>
-  </div>
+<div style="max-width:440px;margin:0 auto;padding:20px 16px 60px">
+<div style="margin-bottom:20px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<span class="text-accent" style="font-size:0.85rem;font-weight:700" id="q-counter">Q1 / 40</span>
+<button style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:0.78rem;cursor:pointer;font-family:'Noto Sans JP',sans-serif" onclick="goSurveyBack()">← 前の問</button>
+</div>
+<div class="progress-bar"><div class="progress-fill" id="survey-progress" style="width:0%"></div></div>
+</div>
+<div style="text-align:center;margin-bottom:20px"><span class="sec-chip" id="q-section">ビジョン力</span></div>
+<div class="gec-card" style="padding:20px;margin-bottom:16px">
+<div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:10px" id="q-type-label">あなたの度合いを選んでください</div>
+<p style="font-weight:700;line-height:1.7;margin-bottom:20px;font-size:1rem" id="q-text">設問テキスト</p>
+<div id="answer-scale" class="hidden"><div style="display:flex;gap:6px">
+<button class="scale-btn" data-val="1" onclick="selectScale(this)"><div style="font-size:1.3rem;margin-bottom:4px">😞</div><div style="font-size:0.68rem">まったく<br>当てはまらない</div></button>
+<button class="scale-btn" data-val="2" onclick="selectScale(this)"><div style="font-size:1.3rem;margin-bottom:4px">🙁</div><div style="font-size:0.68rem">あまり<br>当てはまらない</div></button>
+<button class="scale-btn" data-val="3" onclick="selectScale(this)"><div style="font-size:1.3rem;margin-bottom:4px">😐</div><div style="font-size:0.68rem">どちらとも<br>いえない</div></button>
+<button class="scale-btn" data-val="4" onclick="selectScale(this)"><div style="font-size:1.3rem;margin-bottom:4px">😊</div><div style="font-size:0.68rem">やや<br>当てはまる</div></button>
+<button class="scale-btn" data-val="5" onclick="selectScale(this)"><div style="font-size:1.3rem;margin-bottom:4px">😄</div><div style="font-size:0.68rem">とても<br>当てはまる</div></button>
+</div></div>
+<div id="answer-choice" class="hidden" style="display:flex;flex-direction:column;gap:8px"></div>
+<div id="answer-text" class="hidden"><textarea class="rpg-textarea" id="free-text-input" placeholder="自由に入力してください（スキップ可）"></textarea></div>
+</div>
+<div style="display:flex;gap:10px">
+<button class="btn-secondary" style="flex:1" id="survey-back-btn" onclick="goSurveyBack()">← 前へ</button>
+<button class="btn-primary" style="flex:2" id="survey-next-btn" onclick="goSurveyNext()" disabled>次へ →</button>
+</div>
+</div>
 </div>
 
 <!-- ========================================================
      SCREEN 5: 診断中
 ======================================================== -->
 <div id="screen-analyzing" class="screen">
-  <div class="max-w-md mx-auto px-5 py-14 text-center">
-    <!-- 魔法陣ローディング -->
-    <div class="flex justify-center mb-8">
-      <div class="relative" style="width:120px;height:120px">
-        <div class="magic-circle absolute" style="width:110px;height:110px;top:5px;left:5px"></div>
-        <div class="magic-circle magic-circle-2 absolute" style="width:76px;height:76px;top:22px;left:22px"></div>
-        <div class="absolute" style="top:20px;left:20px"><div class="loading-ring"></div></div>
-        <div class="absolute inset-0 flex items-center justify-center text-4xl" id="analyzing-emoji">⚔️</div>
-      </div>
-    </div>
-
-    <h2 class="text-xl font-bold mb-3">あなたの起業家タイプを解析中…</h2>
-    <p class="text-yellow-400 text-sm pulse mb-7" id="analyzing-msg">ビジョン力を測定中...</p>
-
-    <div class="rpg-card p-5 space-y-3 text-left">
-      <div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>ビジョン力</span><span id="p-vision">-</span></div><div class="status-bar"><div class="status-fill bg-orange-400" style="width:0%" id="pb-vision"></div></div></div>
-      <div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>実行力</span><span id="p-action">-</span></div><div class="status-bar"><div class="status-fill bg-red-400" style="width:0%" id="pb-action"></div></div></div>
-      <div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>共感力</span><span id="p-empathy">-</span></div><div class="status-bar"><div class="status-fill bg-green-400" style="width:0%" id="pb-empathy"></div></div></div>
-      <div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>分析力</span><span id="p-analysis">-</span></div><div class="status-bar"><div class="status-fill bg-blue-400" style="width:0%" id="pb-analysis"></div></div></div>
-      <div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>創造力</span><span id="p-creative">-</span></div><div class="status-bar"><div class="status-fill bg-purple-400" style="width:0%" id="pb-creative"></div></div></div>
-      <div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>挑戦力</span><span id="p-risk">-</span></div><div class="status-bar"><div class="status-fill bg-yellow-400" style="width:0%" id="pb-risk"></div></div></div>
-      <div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>巻き込み力</span><span id="p-team">-</span></div><div class="status-bar"><div class="status-fill bg-teal-400" style="width:0%" id="pb-team"></div></div></div>
-      <div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>継続力</span><span id="p-persist">-</span></div><div class="status-bar"><div class="status-fill bg-pink-400" style="width:0%" id="pb-persist"></div></div></div>
-    </div>
-  </div>
+<div style="max-width:440px;margin:0 auto;padding:60px 20px;text-align:center">
+<div style="display:flex;justify-content:center;margin-bottom:36px">
+<div style="position:relative;width:120px;height:120px">
+<div class="magic-circle" style="position:absolute;width:110px;height:110px;top:5px;left:5px"></div>
+<div class="magic-circle magic-circle-2" style="position:absolute;width:76px;height:76px;top:22px;left:22px"></div>
+<div style="position:absolute;top:20px;left:20px"><div class="loading-ring"></div></div>
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.4rem" id="analyzing-emoji">⚔️</div>
+</div>
+</div>
+<h2 style="font-size:1.2rem;font-weight:900;margin-bottom:10px">起業家タイプを解析中…</h2>
+<p class="text-accent pulse" style="font-size:0.88rem;margin-bottom:32px" id="analyzing-msg">ビジョン力を測定中…</p>
+<div class="gec-card" style="padding:20px;text-align:left;display:flex;flex-direction:column;gap:12px">
+<div><div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:rgba(255,255,255,0.45)">ビジョン力</span><span id="p-vision">-</span></div><div class="status-bar"><div class="status-fill" style="background:#60a5fa;width:0%;transition:width 1.5s ease" id="pb-vision"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:rgba(255,255,255,0.45)">実行力</span><span id="p-action">-</span></div><div class="status-bar"><div class="status-fill" style="background:#f87171;width:0%;transition:width 1.5s ease" id="pb-action"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:rgba(255,255,255,0.45)">共感力</span><span id="p-empathy">-</span></div><div class="status-bar"><div class="status-fill" style="background:#34d399;width:0%;transition:width 1.5s ease" id="pb-empathy"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:rgba(255,255,255,0.45)">分析力</span><span id="p-analysis">-</span></div><div class="status-bar"><div class="status-fill" style="background:#818cf8;width:0%;transition:width 1.5s ease" id="pb-analysis"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:rgba(255,255,255,0.45)">創造力</span><span id="p-creative">-</span></div><div class="status-bar"><div class="status-fill" style="background:#a78bfa;width:0%;transition:width 1.5s ease" id="pb-creative"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:rgba(255,255,255,0.45)">挑戦力</span><span id="p-risk">-</span></div><div class="status-bar"><div class="status-fill" style="background:#fbbf24;width:0%;transition:width 1.5s ease" id="pb-risk"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:rgba(255,255,255,0.45)">巻き込み力</span><span id="p-team">-</span></div><div class="status-bar"><div class="status-fill" style="background:#22d3ee;width:0%;transition:width 1.5s ease" id="pb-team"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:rgba(255,255,255,0.45)">継続力</span><span id="p-persist">-</span></div><div class="status-bar"><div class="status-fill" style="background:#fb923c;width:0%;transition:width 1.5s ease" id="pb-persist"></div></div></div>
+</div>
+</div>
 </div>
 
 <!-- ========================================================
      SCREEN 6: キャラ出現
 ======================================================== -->
 <div id="screen-reveal" class="screen">
-  <div class="max-w-md mx-auto px-5 py-10 text-center">
-    <div class="fade-in-up mb-5">
-      <p class="text-gray-400 text-sm mb-3"><span id="reveal-nickname">???</span>さんの起業家キャラが現れました！</p>
-      <div class="char-big char-reveal mb-4" id="reveal-char-emoji">⚔️</div>
-    </div>
-
-    <div class="glow-pulse rpg-card-gold p-6 mb-5 fade-in-up" style="animation-delay:0.5s">
-      <div class="text-4xl font-rpg font-bold text-yellow-400 mb-2" id="reveal-char-name">勇者</div>
-      <div class="text-sm text-yellow-300 mb-3" id="reveal-char-type">ビジョン牽引型</div>
-      <div class="text-white text-sm leading-relaxed italic" id="reveal-char-copy">「未来を掲げ、仲間を導く冒険の旗手」</div>
-    </div>
-
-    <div class="rpg-card p-4 mb-7 fade-in-up" style="animation-delay:1s">
-      <p class="text-gray-400 text-xs mb-2">サブキャラクター</p>
-      <div class="flex items-center justify-center gap-3">
-        <span class="text-3xl" id="reveal-sub-emoji">🧠</span>
-        <div>
-          <span class="font-bold" id="reveal-sub-name">軍師</span>
-          <span class="text-gray-400 text-xs ml-2" id="reveal-sub-type">戦略分析型</span>
-        </div>
-      </div>
-      <div id="reveal-hybrid-badge" class="hidden mt-2">
-        <span class="text-xs bg-yellow-500 text-black px-3 py-1 rounded-full font-bold">✨ ハイブリッドタイプ</span>
-      </div>
-    </div>
-
-    <button class="btn-primary w-full" onclick="goTo('detail')">詳細を見る →</button>
-  </div>
+<div style="max-width:440px;margin:0 auto;padding:40px 20px 60px;text-align:center">
+<div class="fade-in-up" style="margin-bottom:20px">
+<p style="font-size:0.85rem;color:rgba(255,255,255,0.45);margin-bottom:16px"><span id="reveal-nickname">???</span>さんの起業家キャラが現れました！</p>
+<div class="char-big char-reveal" style="margin-bottom:20px" id="reveal-char-emoji">⚔️</div>
+</div>
+<div class="gec-card-blue glow-pulse" style="padding:28px;margin-bottom:20px">
+<div style="font-family:'Barlow',sans-serif;font-size:2.4rem;font-weight:800;color:#fff;letter-spacing:0.05em;margin-bottom:6px" id="reveal-char-name">勇者</div>
+<div class="sec-chip" style="margin-bottom:12px" id="reveal-char-type">ビジョン牽引型</div>
+<div style="font-size:0.9rem;color:rgba(255,255,255,0.7);font-style:italic;line-height:1.6" id="reveal-char-copy">「未来を掲げ、仲間を導く冒険の旗手」</div>
+</div>
+<div class="gec-card" style="padding:16px;margin-bottom:32px">
+<p style="font-size:0.72rem;color:rgba(255,255,255,0.4);margin-bottom:8px">サブキャラクター</p>
+<div style="display:flex;align-items:center;justify-content:center;gap:12px">
+<span style="font-size:2rem" id="reveal-sub-emoji">🧠</span>
+<div>
+<span style="font-weight:700" id="reveal-sub-name">軍師</span>
+<span style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-left:8px" id="reveal-sub-type">戦略分析型</span>
+</div>
+</div>
+<div id="reveal-hybrid-badge" class="hidden" style="margin-top:10px"><span style="font-size:0.75rem;background:#1d4ed8;color:#fff;padding:4px 14px;border-radius:20px;font-weight:700">✨ ハイブリッドタイプ</span></div>
+</div>
+<button class="btn-primary" style="width:100%" onclick="goTo('detail')">詳細を見る →</button>
+</div>
 </div>
 
 <!-- ========================================================
      SCREEN 7: 診断結果詳細
 ======================================================== -->
 <div id="screen-detail" class="screen">
-  <div class="max-w-md mx-auto px-4 py-8">
-    <div class="text-center mb-5">
-      <div class="text-5xl mb-3" id="detail-emoji">⚔️</div>
-      <h2 class="text-2xl font-bold text-yellow-400 mb-1" id="detail-name">勇者</h2>
-      <p class="text-gray-400 text-sm" id="detail-type">ビジョン牽引型</p>
-      <p class="text-white text-sm mt-2 italic" id="detail-copy">未来を掲げ、仲間を導く冒険の旗手</p>
-    </div>
-
-    <div class="rpg-card-gold p-3 mb-5 text-center text-sm">
-      <span class="text-yellow-300"><span id="detail-nickname">???</span>さんの診断結果</span>
-    </div>
-
-    <!-- ステータス -->
-    <div class="rpg-card p-5 mb-4">
-      <h3 class="text-yellow-400 font-bold text-sm mb-4">📊 ステータス</h3>
-      <div class="space-y-3" id="detail-status"></div>
-    </div>
-
-    <!-- 強み -->
-    <div class="rpg-card p-5 mb-4">
-      <h3 class="text-yellow-400 font-bold text-sm mb-3">💪 あなたの強み</h3>
-      <ul class="space-y-2" id="detail-strengths"></ul>
-    </div>
-
-    <!-- 伸びしろ -->
-    <div class="rpg-card p-5 mb-4">
-      <h3 class="text-yellow-400 font-bold text-sm mb-3">🌱 伸びしろ</h3>
-      <ul class="space-y-2" id="detail-weaknesses"></ul>
-    </div>
-
-    <!-- 相性 -->
-    <div class="rpg-card p-5 mb-6">
-      <h3 class="text-yellow-400 font-bold text-sm mb-3">🤝 相性の良い仲間</h3>
-      <div class="flex gap-3" id="detail-compat"></div>
-    </div>
-
-    <div class="flex gap-3">
-      <button class="btn-secondary flex-1 text-sm" onclick="goTo('reveal')">← キャラ</button>
-      <button class="btn-primary" style="flex:2" onclick="goTo('quest')">初回クエスト →</button>
-    </div>
-  </div>
+<div style="max-width:440px;margin:0 auto;padding:24px 16px 60px">
+<div style="text-align:center;margin-bottom:20px">
+<div style="font-size:3rem;margin-bottom:8px" id="detail-emoji">⚔️</div>
+<h2 style="font-size:1.5rem;font-weight:900;color:#fff;margin-bottom:4px" id="detail-name">勇者</h2>
+<p style="font-size:0.82rem;color:rgba(255,255,255,0.45)" id="detail-type">ビジョン牽引型</p>
+<p style="font-size:0.88rem;color:rgba(255,255,255,0.7);margin-top:6px;font-style:italic" id="detail-copy">未来を掲げ、仲間を導く冒険の旗手</p>
+</div>
+<div class="gec-card-blue" style="padding:12px;margin-bottom:16px;text-align:center">
+<span style="font-size:0.82rem;color:#93c5fd"><span id="detail-nickname">???</span>さんの診断結果</span>
+</div>
+<div class="gec-card" style="padding:20px;margin-bottom:12px">
+<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;color:#60a5fa;margin-bottom:14px">パラメータ</div>
+<div id="detail-status" style="display:flex;flex-direction:column;gap:10px"></div>
+</div>
+<div class="gec-card" style="padding:20px;margin-bottom:12px">
+<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;color:#60a5fa;margin-bottom:12px">強み</div>
+<ul id="detail-strengths" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px"></ul>
+</div>
+<div class="gec-card" style="padding:20px;margin-bottom:12px">
+<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;color:#60a5fa;margin-bottom:12px">伸びしろ</div>
+<ul id="detail-weaknesses" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px"></ul>
+</div>
+<div class="gec-card" style="padding:20px;margin-bottom:24px">
+<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;color:#60a5fa;margin-bottom:12px">相性の良い仲間</div>
+<div id="detail-compat" style="display:flex;gap:10px"></div>
+</div>
+<div style="display:flex;gap:10px">
+<button class="btn-secondary" style="flex:1;font-size:0.88rem" onclick="goTo('reveal')">← キャラ</button>
+<button class="btn-primary" style="flex:2" onclick="goTo('quest')">初回クエスト →</button>
+</div>
+</div>
 </div>
 
 <!-- ========================================================
      SCREEN 8: クエスト
 ======================================================== -->
 <div id="screen-quest" class="screen">
-  <div class="max-w-md mx-auto px-5 py-10">
-    <div class="text-center mb-7">
-      <div class="text-4xl mb-3">🎯</div>
-      <h2 class="text-2xl font-bold">初回クエスト</h2>
-      <p class="text-gray-400 text-sm mt-1"><span id="quest-char-name">???</span>への最初の挑戦</p>
-    </div>
-
-    <div class="rpg-card-gold p-6 mb-5">
-      <div class="flex items-center gap-3 mb-4">
-        <span class="text-3xl" id="quest-emoji">⚔️</span>
-        <div>
-          <div class="text-yellow-400 text-xs font-bold">QUEST 001</div>
-          <div class="font-bold">初回クエスト</div>
-        </div>
-      </div>
-      <p class="leading-relaxed" id="quest-description">クエスト内容</p>
-      <div class="mt-4 pt-4 border-t border-yellow-500/20 flex justify-between text-xs text-gray-400">
-        <span>⏱ 今週中に挑戦</span>
-        <span>🏆 +100 EXP</span>
-      </div>
-    </div>
-
-    <div class="rpg-card p-5 mb-7">
-      <h3 class="font-bold text-sm mb-3">💡 攻略のヒント</h3>
-      <div class="space-y-2 text-gray-400 text-sm" id="quest-hints"></div>
-    </div>
-
-    <div class="flex gap-3">
-      <button class="btn-secondary flex-1 text-sm" onclick="goTo('detail')">← 詳細</button>
-      <button class="btn-primary" style="flex:2" onclick="goTo('share')">結果を共有 →</button>
-    </div>
-  </div>
+<div style="max-width:440px;margin:0 auto;padding:32px 20px 60px">
+<div style="text-align:center;margin-bottom:28px">
+<div class="sec-chip" style="margin-bottom:14px">アクション</div>
+<h2 style="font-size:1.4rem;font-weight:900;margin-bottom:6px">初回クエスト</h2>
+<p style="font-size:0.82rem;color:rgba(255,255,255,0.4)"><span id="quest-char-name">???</span>への最初の挑戦</p>
+</div>
+<div class="gec-card-blue" style="padding:24px;margin-bottom:16px">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+<span style="font-size:2rem" id="quest-emoji">⚔️</span>
+<div>
+<div style="font-size:0.65rem;font-weight:700;letter-spacing:0.15em;color:#60a5fa">QUEST 001</div>
+<div style="font-weight:700;font-size:0.95rem">初回クエスト</div>
+</div>
+</div>
+<p style="line-height:1.75;font-size:0.93rem" id="quest-description">クエスト内容</p>
+<div class="gec-divider"></div>
+<div style="display:flex;justify-content:space-between;font-size:0.72rem;color:rgba(255,255,255,0.4)">
+<span>今週中に挑戦</span><span style="color:#60a5fa">+100 EXP</span>
+</div>
+</div>
+<div class="gec-card" style="padding:20px;margin-bottom:32px">
+<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;color:#60a5fa;margin-bottom:12px">攻略のヒント</div>
+<div id="quest-hints" style="display:flex;flex-direction:column;gap:8px;font-size:0.88rem;color:rgba(255,255,255,0.65)"></div>
+</div>
+<div style="display:flex;gap:10px">
+<button class="btn-secondary" style="flex:1;font-size:0.88rem" onclick="goTo('detail')">← 詳細</button>
+<button class="btn-primary" style="flex:2" onclick="goTo('share')">結果を共有 →</button>
+</div>
+</div>
 </div>
 
 <!-- ========================================================
      SCREEN 9: 共有
 ======================================================== -->
 <div id="screen-share" class="screen">
-  <div class="max-w-md mx-auto px-5 py-10">
-    <div class="text-center mb-5">
-      <div class="text-3xl mb-2">📣</div>
-      <h2 class="text-xl font-bold">結果を共有しよう</h2>
-    </div>
-
-    <!-- 共有カード -->
-    <div class="mb-5 rounded-2xl overflow-hidden" id="share-card"
-         style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border:2px solid rgba(246,211,101,0.4)">
-      <div class="p-6">
-        <div class="flex items-center gap-2 mb-4">
-          <span>⚔️✨</span>
-          <span class="font-rpg text-yellow-400 text-sm font-bold tracking-widest">FOUNDER QUEST</span>
-        </div>
-        <div class="text-center mb-4">
-          <div class="text-5xl mb-2" id="share-emoji">⚔️</div>
-          <div class="text-3xl font-bold text-yellow-400 mb-1" id="share-char-name">勇者</div>
-          <div class="text-sm text-gray-400" id="share-char-type">ビジョン牽引型</div>
-          <div class="text-xs text-gray-500 mt-1 italic" id="share-char-copy">未来を掲げ、仲間を導く冒険の旗手</div>
-        </div>
-        <div class="grid grid-cols-4 gap-2 mb-4" id="share-params"></div>
-        <div class="pt-3 mb-3 border-t border-white/10">
-          <p class="text-yellow-400 text-xs font-bold mb-2" id="share-strengths-label">💪 強み</p>
-          <div class="flex flex-wrap gap-1" id="share-strengths"></div>
-        </div>
-        <div class="text-center pt-1">
-          <span class="text-yellow-300 text-xs">🗡️ <span id="share-nickname">???</span> の診断結果</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="rpg-card p-4 mb-4">
-      <p class="text-gray-400 text-xs mb-2">共有テキスト（タップでコピー）</p>
-      <div class="text-white text-sm leading-relaxed" id="share-text-area"></div>
-    </div>
-
-    <button class="btn-primary w-full mb-2" onclick="copyShareText()">📋 テキストをコピー</button>
-    <div class="text-center text-xs text-green-400 mb-2" id="copy-msg" style="display:none">✅ コピーしました！</div>
-
-    <button class="btn-primary w-full mb-2" id="save-image-btn" onclick="saveOrShareCardImage()">📸 自己紹介カード画像を保存・シェア</button>
-    <div class="text-center text-xs mb-5" id="image-msg" style="display:none"></div>
-
-    <div class="flex gap-3">
-      <button class="btn-secondary flex-1 text-sm" onclick="goTo('quest')">← クエスト</button>
-      <button class="btn-primary" style="flex:2" onclick="goTo('room')">マイルームへ →</button>
-    </div>
-  </div>
+<div style="max-width:440px;margin:0 auto;padding:24px 20px 60px">
+<div style="text-align:center;margin-bottom:20px">
+<div class="sec-chip" style="margin-bottom:12px">シェア</div>
+<h2 style="font-size:1.3rem;font-weight:900">結果を共有しよう</h2>
+</div>
+<div id="share-card" style="margin-bottom:16px;border-radius:16px;overflow:hidden;border:1.5px solid rgba(96,165,250,0.35)">
+<div style="padding:24px;background:linear-gradient(135deg,#06091a 0%,#0a1e3d 100%)">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;width:20px;height:20px"><span style="background:#fff;border-radius:1px;display:block"></span><span style="background:#fff;border-radius:1px;display:block"></span><span style="background:#fff;border-radius:1px;display:block"></span><span style="background:#fff;border-radius:1px;display:block"></span></div>
+<span style="font-family:'Barlow',sans-serif;font-weight:800;font-size:0.85rem;letter-spacing:0.12em;color:#60a5fa">FOUNDER QUEST</span>
+</div>
+<div style="text-align:center;margin-bottom:16px">
+<div style="font-size:3rem;margin-bottom:6px" id="share-emoji">⚔️</div>
+<div style="font-size:1.6rem;font-weight:900;margin-bottom:4px" id="share-char-name">勇者</div>
+<div style="font-size:0.75rem;color:rgba(255,255,255,0.5)" id="share-char-type">ビジョン牽引型</div>
+<div style="font-size:0.72rem;color:rgba(255,255,255,0.35);margin-top:4px;font-style:italic" id="share-char-copy"></div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px" id="share-params"></div>
+<div style="padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);margin-bottom:10px">
+<p style="font-size:0.68rem;font-weight:700;letter-spacing:0.1em;color:#60a5fa;margin-bottom:6px">強み</p>
+<div style="display:flex;flex-wrap:wrap;gap:5px" id="share-strengths"></div>
+</div>
+<div style="text-align:center"><span style="font-size:0.72rem;color:rgba(255,255,255,0.3)"><span id="share-nickname">???</span> の診断結果</span></div>
+</div>
+</div>
+<div class="gec-card" style="padding:14px;margin-bottom:14px">
+<p style="font-size:0.72rem;color:rgba(255,255,255,0.4);margin-bottom:6px">共有テキスト（タップでコピー）</p>
+<div style="font-size:0.88rem;line-height:1.7;white-space:pre-wrap" id="share-text-area"></div>
+</div>
+<button class="btn-primary" style="width:100%;margin-bottom:8px" onclick="copyShareText()">テキストをコピー</button>
+<div style="text-align:center;font-size:0.78rem;color:#34d399;margin-bottom:6px;display:none" id="copy-msg">✅ コピーしました！</div>
+<button class="btn-primary" style="width:100%;margin-bottom:6px" id="save-image-btn" onclick="saveOrShareCardImage()">カード画像を保存・シェア</button>
+<div style="text-align:center;font-size:0.78rem;margin-bottom:20px;display:none" id="image-msg"></div>
+<div style="display:flex;gap:10px">
+<button class="btn-secondary" style="flex:1;font-size:0.88rem" onclick="goTo('quest')">← クエスト</button>
+<button class="btn-primary" style="flex:2" onclick="goTo('room')">マイルームへ →</button>
+</div>
+</div>
 </div>
 
 <!-- ========================================================
      SCREEN 10: マイルーム
 ======================================================== -->
 <div id="screen-room" class="screen">
-  <div class="max-w-md mx-auto px-5 py-8">
-    <div class="text-center mb-5">
-      <div class="text-xs text-yellow-500 tracking-widest mb-1">MY ROOM</div>
-      <h2 class="text-xl font-bold"><span id="room-nickname">???</span>の冒険の部屋</h2>
-    </div>
-
-    <!-- キャラ表示 -->
-    <div class="rpg-card p-6 mb-4 text-center">
-      <div class="float cursor-pointer mb-3" onclick="showCharMessage()">
-        <div class="text-7xl" id="room-char-emoji">⚔️</div>
-      </div>
-      <div class="speech-bubble mb-3" id="room-message-bubble" style="display:none">
-        <p class="text-yellow-300 text-sm font-bold" id="room-message-text">さあ、ビジョンを語ろう！</p>
-      </div>
-      <div class="flex justify-center gap-4 text-xs text-gray-400">
-        <span>🌟 Lv.1</span>
-        <span id="room-title">冒険の始まりの勇者</span>
-      </div>
-    </div>
-
-    <div class="rpg-card-gold p-4 mb-4 text-center">
-      <div class="text-2xl font-bold text-yellow-400" id="room-char-name">勇者</div>
-      <div class="text-xs text-yellow-300 mt-1" id="room-char-type">ビジョン牽引型</div>
-    </div>
-
-    <!-- クエスト -->
-    <div class="rpg-card p-4 mb-5">
-      <h3 class="text-yellow-400 font-bold text-xs mb-2">🎯 現在のクエスト</h3>
-      <p class="text-sm leading-relaxed" id="room-quest-text">クエスト内容</p>
-      <div class="mt-3 progress-bar"><div class="progress-fill" style="width:0%"></div></div>
-    </div>
-
-    <!-- アクション -->
-    <div class="space-y-2 mb-6">
-      <button class="btn-secondary w-full text-sm text-left flex items-center gap-3" onclick="goTo('detail')"><span>📊</span><span>診断結果を見る</span></button>
-      <button class="btn-secondary w-full text-sm text-left flex items-center gap-3" onclick="goTo('quest')"><span>🎯</span><span>クエストを見る</span></button>
-      <button class="btn-secondary w-full text-sm text-left flex items-center gap-3" onclick="goTo('share')"><span>📣</span><span>結果を共有する</span></button>
-    </div>
-
-    <div class="text-center">
-      <button class="text-gray-600 text-xs underline" onclick="resetAndStart()">🔄 もう一度診断する</button>
-    </div>
-  </div>
+<div style="max-width:440px;margin:0 auto;padding:24px 20px 60px">
+<div style="text-align:center;margin-bottom:20px">
+<div style="font-size:0.65rem;font-weight:700;letter-spacing:0.18em;color:#60a5fa;margin-bottom:6px;text-transform:uppercase">MY ROOM</div>
+<h2 style="font-size:1.2rem;font-weight:900"><span id="room-nickname">???</span>の冒険の部屋</h2>
+</div>
+<div class="gec-card" style="padding:24px;margin-bottom:14px;text-align:center">
+<div class="float" style="cursor:pointer;margin-bottom:12px" onclick="showCharMessage()">
+<div style="font-size:5rem" id="room-char-emoji">⚔️</div>
+</div>
+<div id="room-message-bubble" class="speech-bubble" style="display:none;margin-bottom:12px">
+<p style="font-size:0.88rem;font-weight:700;color:#93c5fd" id="room-message-text">さあ、ビジョンを語ろう！</p>
+</div>
+<div style="display:flex;justify-content:center;gap:16px;font-size:0.72rem;color:rgba(255,255,255,0.4)">
+<span>Lv.1</span><span id="room-title">冒険の始まりの勇者</span>
+</div>
+</div>
+<div class="gec-card-blue" style="padding:16px;margin-bottom:14px;text-align:center">
+<div style="font-size:1.4rem;font-weight:900;margin-bottom:4px" id="room-char-name">勇者</div>
+<div style="font-size:0.75rem;color:#93c5fd" id="room-char-type">ビジョン牽引型</div>
+</div>
+<div class="gec-card" style="padding:16px;margin-bottom:20px">
+<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;color:#60a5fa;margin-bottom:8px">現在のクエスト</div>
+<p style="font-size:0.88rem;line-height:1.7" id="room-quest-text">クエスト内容</p>
+<div style="margin-top:12px" class="progress-bar"><div class="progress-fill" style="width:5%"></div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:28px">
+<button class="btn-secondary" style="text-align:left;display:flex;align-items:center;gap:10px;font-size:0.88rem" onclick="goTo('detail')"><span style="color:#60a5fa">▸</span><span>診断結果を見る</span></button>
+<button class="btn-secondary" style="text-align:left;display:flex;align-items:center;gap:10px;font-size:0.88rem" onclick="goTo('quest')"><span style="color:#60a5fa">▸</span><span>クエストを見る</span></button>
+<button class="btn-secondary" style="text-align:left;display:flex;align-items:center;gap:10px;font-size:0.88rem" onclick="goTo('share')"><span style="color:#60a5fa">▸</span><span>結果を共有する</span></button>
+</div>
+<div style="text-align:center">
+<button style="background:none;border:none;color:rgba(255,255,255,0.25);font-size:0.78rem;cursor:pointer;font-family:'Noto Sans JP',sans-serif;text-decoration:underline" onclick="resetAndStart()">もう一度診断する</button>
+</div>
+</div>
 </div>
 
 <!-- ===== データ & ロジック ===== -->
@@ -761,512 +482,6 @@
 <script src="lib/diagnosis.js"></script>
 <!-- config.js はGit管理外（.gitignore）。config.example.js をコピーして値を設定してください -->
 <script src="config.js"></script>
-
-<script>
-// ========== Supabase設定 ==========
-// SUPABASE_URL / SUPABASE_ANON_KEY は config.js（Git管理外）から読み込まれます
-let supabaseClient = null;
-if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined'
-    && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY') {
-  supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
-
-function getDeviceId() {
-  let id = localStorage.getItem('fq_device_id');
-  if (!id) {
-    id = (crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    localStorage.setItem('fq_device_id', id);
-  }
-  return id;
-}
-
-async function saveResultToSupabase(result) {
-  if (!supabaseClient) return; // 未設定の場合はローカル保存のみ（診断フローには影響しない）
-  try {
-    const freeTextAnswers = {};
-    S.answers.forEach(a => { if (a && a.type === 'free_text') freeTextAnswers[a.questionId] = a.value; });
-
-    const { error } = await supabaseClient.from('diagnosis_results').insert({
-      device_id: getDeviceId(),
-      nickname: S.nickname,
-      stage: S.stage,
-      interests: S.interests,
-      free_text_answers: freeTextAnswers,
-      parameter_scores: result.parameterScores,
-      main_character: result.mainCharacter,
-      sub_character: result.subCharacter,
-      is_hybrid: result.isHybrid
-    });
-    if (error) console.error('Supabase保存エラー:', error);
-  } catch (e) {
-    console.error('Supabase保存に失敗しました:', e);
-  }
-}
-
-// ========== 状態管理 ==========
-let S = {
-  nickname: '', stage: null, interests: [],
-  currentQ: 0, answers: [], result: null
-};
-
-function saveState() {
-  try { localStorage.setItem('fq_state', JSON.stringify(S)); } catch(e) {}
-}
-function loadState() {
-  try {
-    const d = localStorage.getItem('fq_state');
-    if (d) { const p = JSON.parse(d); if (p.result) { S = p; return true; } }
-  } catch(e) {}
-  return false;
-}
-
-// ========== 星 ==========
-function createStars() {
-  const el = document.getElementById('stars');
-  for (let i = 0; i < 60; i++) {
-    const s = document.createElement('div');
-    s.className = 'star';
-    s.style.cssText =
-      `left:${Math.random()*100}%;top:${Math.random()*100}%;` +
-      `--dur:${2+Math.random()*4}s;--delay:${Math.random()*4}s`;
-    el.appendChild(s);
-  }
-}
-
-// ========== 画面遷移 ==========
-function goTo(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  const t = document.getElementById('screen-' + id);
-  if (!t) return;
-  t.classList.add('active');
-  // トップへスクロール
-  window.scrollTo(0, 0);
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
-
-  if (id === 'reveal') renderReveal();
-  if (id === 'detail') renderDetail();
-  if (id === 'quest')  renderQuest();
-  if (id === 'share')  renderShare();
-  if (id === 'room')   renderRoom();
-}
-
-// ========== プロフィール ==========
-function selectStage(btn) {
-  document.querySelectorAll('#stage-options button').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  S.stage = btn.dataset.value;
-}
-function toggleInterest(btn) {
-  const v = btn.dataset.value;
-  if (btn.classList.contains('selected')) {
-    btn.classList.remove('selected');
-    S.interests = S.interests.filter(i => i !== v);
-  } else {
-    btn.classList.add('selected');
-    S.interests.push(v);
-  }
-}
-function startSurvey() {
-  const nn = document.getElementById('nickname-input').value.trim();
-  if (!nn) {
-    const inp = document.getElementById('nickname-input');
-    inp.style.borderColor = '#ef4444';
-    inp.placeholder = 'ニックネームを入力してください';
-    inp.focus();
-    return;
-  }
-  S.nickname = nn;
-  S.currentQ = 0;
-  S.answers = QUESTIONS.map(() => null);
-  goTo('survey');
-  renderQ(0);
-}
-
-// ========== サーベイ ==========
-const SEC_LABELS = {
-  vision:'ビジョン力', action:'実行力', empathy:'共感力',
-  analysis:'分析力', creative:'創造力', risk:'挑戦力',
-  team:'巻き込み力', persist:'継続力'
-};
-
-function renderQ(idx) {
-  const q   = QUESTIONS[idx];
-  const tot = QUESTIONS.length;
-  const pct = Math.round((idx / tot) * 100);
-
-  document.getElementById('q-counter').textContent  = `Q${idx+1} / ${tot}`;
-  document.getElementById('survey-progress').style.width = pct + '%';
-  document.getElementById('q-text').textContent      = q.question;
-
-  const secEl = document.getElementById('q-section');
-  const lblEl = document.getElementById('q-type-label');
-
-  if (q.type === 'scale') {
-    secEl.textContent = SEC_LABELS[q.section] || '';
-    lblEl.textContent = 'あなたの度合いを選んでください';
-  } else if (q.type === 'scenario') {
-    secEl.textContent = 'シナリオ選択';
-    lblEl.textContent = 'あなたならどうしますか？';
-  } else if (q.type === 'value') {
-    secEl.textContent = '価値観';
-    lblEl.textContent = 'あなたの価値観に近いものを選んでください';
-  } else {
-    secEl.textContent = '自由記述（スキップ可）';
-    lblEl.textContent = '自由に入力してください';
-  }
-
-  // 表示切替
-  document.getElementById('answer-scale').classList.add('hidden');
-  document.getElementById('answer-choice').classList.add('hidden');
-  document.getElementById('answer-text').classList.add('hidden');
-
-  const nextBtn = document.getElementById('survey-next-btn');
-  nextBtn.disabled = true;
-  const backBtn = document.getElementById('survey-back-btn');
-  backBtn.disabled = idx === 0;
-  backBtn.style.opacity = idx === 0 ? '0.4' : '1';
-
-  const existing = S.answers[idx];
-
-  if (q.type === 'scale') {
-    document.getElementById('answer-scale').classList.remove('hidden');
-    document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('selected'));
-    if (existing) {
-      const sel = document.querySelector(`.scale-btn[data-val="${existing.value}"]`);
-      if (sel) sel.classList.add('selected');
-      nextBtn.disabled = false;
-    }
-  } else if (q.type === 'scenario' || q.type === 'value') {
-    document.getElementById('answer-choice').classList.remove('hidden');
-    const box = document.getElementById('answer-choice');
-    box.innerHTML = '';
-    q.options.forEach((opt, i) => {
-      const b = document.createElement('button');
-      b.className = 'choice-btn';
-      b.textContent = opt.label;
-      b.dataset.param = opt.parameter;
-      b.dataset.idx   = i;
-      if (existing && parseInt(existing.value) === i) {
-        b.classList.add('selected');
-        nextBtn.disabled = false;
-      }
-      b.onclick = function() {
-        document.querySelectorAll('.choice-btn').forEach(x => x.classList.remove('selected'));
-        this.classList.add('selected');
-        S.answers[idx] = { questionId: q.id, type: q.type, value: this.dataset.idx, parameter: this.dataset.param };
-        nextBtn.disabled = false;
-      };
-      box.appendChild(b);
-    });
-  } else {
-    document.getElementById('answer-text').classList.remove('hidden');
-    const ta = document.getElementById('free-text-input');
-    ta.value = (existing && existing.value) ? existing.value : '';
-    nextBtn.disabled = false;
-    ta.oninput = function() {
-      S.answers[idx] = { questionId: q.id, type: 'free_text', value: ta.value, parameter: null };
-    };
-  }
-}
-
-function selectScale(btn) {
-  document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  const q = QUESTIONS[S.currentQ];
-  S.answers[S.currentQ] = { questionId: q.id, type: 'scale', value: parseInt(btn.dataset.val), parameter: q.parameter };
-  document.getElementById('survey-next-btn').disabled = false;
-}
-
-function goSurveyNext() {
-  const idx = S.currentQ;
-  const q   = QUESTIONS[idx];
-  if (q.type === 'free_text') {
-    const ta = document.getElementById('free-text-input');
-    S.answers[idx] = { questionId: q.id, type: 'free_text', value: ta.value, parameter: null };
-  }
-  if (idx < QUESTIONS.length - 1) {
-    S.currentQ++;
-    renderQ(S.currentQ);
-  } else {
-    startAnalyzing();
-  }
-}
-
-function goSurveyBack() {
-  if (S.currentQ > 0) { S.currentQ--; renderQ(S.currentQ); }
-}
-
-// ========== 診断処理 ==========
-function startAnalyzing() {
-  goTo('analyzing');
-  saveState();
-
-  const msgs   = ['ビジョン力を測定中...','実行力を解析中...','共感力を確認中...','分析力をスキャン中...','創造力を評価中...','挑戦力を測定中...','巻き込み力を解析中...','継続力を確認中...','キャラを召喚中...'];
-  const emojis = ['⚔️','🛡️','🙏','🔮','🗡️','💰','🧠','✨','🌟'];
-  let mi = 0;
-  const iv = setInterval(() => {
-    document.getElementById('analyzing-msg').textContent = msgs[mi % msgs.length];
-    document.getElementById('analyzing-emoji').textContent = emojis[mi % emojis.length];
-    mi++;
-  }, 550);
-
-  const valid  = S.answers.filter(a => a !== null);
-  const result = runDiagnosis(valid);
-  S.result = result;
-  saveResultToSupabase(result); // 非同期でDBに蓄積（失敗しても診断フローは止めない）
-
-  setTimeout(() => {
-    const norm = normalizeScores(result.parameterScores);
-    const map  = { vision:'VISION', action:'ACTION', empathy:'EMPATHY', analysis:'ANALYSIS', creative:'CREATIVE', risk:'RISK', team:'TEAM', persist:'PERSIST' };
-    Object.entries(map).forEach(([k, K]) => {
-      document.getElementById('pb-' + k).style.width = norm[K] + '%';
-      document.getElementById('p-'  + k).textContent = result.parameterScores[K];
-    });
-  }, 400);
-
-  setTimeout(() => { clearInterval(iv); saveState(); goTo('reveal'); }, 5000);
-}
-
-// ========== キャラ出現 ==========
-function renderReveal() {
-  const r = S.result; if (!r) return;
-  const main = CHARACTERS[r.mainCharacter];
-  const sub  = CHARACTERS[r.subCharacter];
-  document.getElementById('reveal-nickname').textContent   = S.nickname;
-  document.getElementById('reveal-char-emoji').textContent = main.emoji;
-  document.getElementById('reveal-char-name').textContent  = main.name;
-  document.getElementById('reveal-char-type').textContent  = main.entrepreneurType;
-  document.getElementById('reveal-char-copy').textContent  = `「${main.catchcopy}」`;
-  if (sub) {
-    document.getElementById('reveal-sub-emoji').textContent = sub.emoji;
-    document.getElementById('reveal-sub-name').textContent  = sub.name;
-    document.getElementById('reveal-sub-type').textContent  = sub.entrepreneurType;
-  }
-  document.getElementById('reveal-hybrid-badge').classList.toggle('hidden', !r.isHybrid);
-}
-
-// ========== 結果詳細 ==========
-const P_COLORS = { VISION:'#FF6B35', ACTION:'#E63946', EMPATHY:'#2DC653', ANALYSIS:'#457B9D', CREATIVE:'#7B2FBE', RISK:'#F4A261', TEAM:'#A8DADC', PERSIST:'#E9C46A' };
-
-function renderDetail() {
-  const r = S.result; if (!r) return;
-  const main = CHARACTERS[r.mainCharacter];
-  document.getElementById('detail-emoji').textContent    = main.emoji;
-  document.getElementById('detail-name').textContent     = main.name;
-  document.getElementById('detail-type').textContent     = main.entrepreneurType;
-  document.getElementById('detail-copy').textContent     = main.catchcopy;
-  document.getElementById('detail-nickname').textContent = S.nickname;
-
-  // ステータスバー
-  const norm   = normalizeScores(r.parameterScores);
-  const params = [['VISION','ビジョン力'],['ACTION','実行力'],['EMPATHY','共感力'],['ANALYSIS','分析力'],['CREATIVE','創造力'],['RISK','挑戦力'],['TEAM','巻き込み力'],['PERSIST','継続力']];
-  document.getElementById('detail-status').innerHTML = params.map(([K,L]) => `
-    <div>
-      <div class="flex justify-between text-xs mb-1">
-        <span class="text-gray-400">${L}</span>
-        <span class="font-bold" style="color:${P_COLORS[K]}">${r.parameterScores[K]}</span>
-      </div>
-      <div class="status-bar"><div class="status-fill" style="width:${norm[K]}%;background:${P_COLORS[K]};transition:width 1s ease 0.3s"></div></div>
-    </div>`).join('');
-
-  // 強み
-  document.getElementById('detail-strengths').innerHTML = main.strengths.map(s =>
-    `<li class="flex items-start gap-2 text-sm"><span class="text-yellow-400 mt-0.5">✦</span><span>${s}</span></li>`).join('');
-
-  // 伸びしろ
-  document.getElementById('detail-weaknesses').innerHTML = main.weaknesses.map(w =>
-    `<li class="flex items-start gap-2 text-sm text-gray-300"><span class="text-blue-400 mt-0.5">◇</span><span>${w}</span></li>`).join('');
-
-  // 相性
-  document.getElementById('detail-compat').innerHTML = main.compatibleCharacters.map(name => {
-    const c = Object.values(CHARACTERS).find(x => x.name === name);
-    return c ? `<div class="rpg-card p-3 text-center flex-1"><div class="text-3xl mb-1">${c.emoji}</div><div class="text-white text-xs font-bold">${c.name}</div><div class="text-gray-500 text-xs">${c.entrepreneurType}</div></div>` : '';
-  }).join('');
-}
-
-// ========== クエスト ==========
-const HINTS = {
-  hero:['まずアイデアを1枚の紙にまとめましょう','信頼できる3人に話す機会を作りましょう','フィードバックはメモしておきましょう'],
-  warrior:['24〜48時間の期限を設定しましょう','完璧より「まず動く」を優先しましょう','小さくても実行した記録を残しましょう'],
-  monk:['会話しやすい場所を選びましょう','相手の話を7割聞くことを意識しましょう','共通するキーワードを書き出しましょう'],
-  mage:['アイデアを3つ書き出しましょう','「誰の何の課題か」を各アイデアに書きましょう','最も顧客に近い1つを選びましょう'],
-  thief:['SNS・ニュース・街中から変化を探しましょう','「なぜ今なのか？」を分析しましょう','気になったものは記録しておきましょう'],
-  merchant:['誰が・何に・いくら払うかを1文で書きましょう','類似サービスの料金も調べてみましょう','自分なりの価格感覚をつけましょう'],
-  strategist:['市場・競合・顧客の3つを分けて整理しましょう','それぞれ3つずつ書き出すだけでOKです','優先すべき課題を1つ決めましょう'],
-  summoner:['どんな専門性を持つ仲間が必要かリストしましょう','既存のネットワークから候補者を探しましょう','まず1人に声をかけてみましょう']
-};
-
-function renderQuest() {
-  const r = S.result; if (!r) return;
-  const main = CHARACTERS[r.mainCharacter];
-  document.getElementById('quest-char-name').textContent  = main.name;
-  document.getElementById('quest-emoji').textContent      = main.emoji;
-  document.getElementById('quest-description').textContent = main.firstQuest;
-  const hints = HINTS[r.mainCharacter] || ['一歩ずつ、丁寧に取り組みましょう'];
-  document.getElementById('quest-hints').innerHTML = hints.map(h => `<div class="flex gap-2"><span>•</span><span>${h}</span></div>`).join('');
-}
-
-// ========== 共有 ==========
-function renderShare() {
-  const r = S.result; if (!r) return;
-  const main = CHARACTERS[r.mainCharacter];
-  document.getElementById('share-emoji').textContent     = main.emoji;
-  document.getElementById('share-char-name').textContent = main.name;
-  document.getElementById('share-char-type').textContent = main.entrepreneurType;
-  document.getElementById('share-char-copy').textContent = main.catchcopy;
-  document.getElementById('share-nickname').textContent  = S.nickname;
-
-  // キャラのテーマカラーでカードを彩る
-  const card = document.getElementById('share-card');
-  card.style.background = `linear-gradient(135deg, #1a1a2e 0%, ${main.themeColor}2e 55%, #0f3460 100%)`;
-  card.style.borderColor = `${main.themeColor}88`;
-
-  const norm   = normalizeScores(r.parameterScores);
-  const params = [['VISION','ビジョン'],['ACTION','実行'],['EMPATHY','共感'],['ANALYSIS','分析'],['CREATIVE','創造'],['RISK','挑戦'],['TEAM','巻込'],['PERSIST','継続']];
-  document.getElementById('share-params').innerHTML = params.map(([K,L]) =>
-    `<div class="text-center"><div class="text-xs text-gray-500 mb-1">${L}</div><div class="text-sm font-bold">${r.parameterScores[K]}</div></div>`).join('');
-
-  document.getElementById('share-strengths').innerHTML = main.strengths.map(s =>
-    `<span class="text-xs px-2 py-1 rounded-full" style="background:${main.themeColor}26;color:${main.themeColor};border:1px solid ${main.themeColor}55">${s}</span>`).join('');
-
-  const txt = `私の起業家タイプは「${main.name}」でした。\n${main.catchcopy}\n\nあなたはどのキャラになる？\n#FounderQuest #起業家RPG診断`;
-  document.getElementById('share-text-area').textContent = txt;
-}
-
-function copyShareText() {
-  const txt = document.getElementById('share-text-area').textContent;
-  const msg = document.getElementById('copy-msg');
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(txt).then(() => { msg.style.display='block'; setTimeout(()=>msg.style.display='none',2000); });
-  } else {
-    const el = document.createElement('textarea');
-    el.value = txt;
-    document.body.appendChild(el);
-    el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    msg.style.display = 'block';
-    setTimeout(() => msg.style.display = 'none', 2000);
-  }
-}
-
-// ========== 自己紹介カード画像 ==========
-function showImageMsg(text, color) {
-  const msg = document.getElementById('image-msg');
-  msg.textContent = text;
-  msg.style.color = color;
-  msg.style.display = 'block';
-}
-
-async function saveOrShareCardImage() {
-  const r = S.result; if (!r) return;
-  const main = CHARACTERS[r.mainCharacter];
-  const btn  = document.getElementById('save-image-btn');
-  const originalLabel = btn.textContent;
-
-  btn.disabled = true;
-  btn.textContent = '⏳ 画像を生成中...';
-  document.getElementById('image-msg').style.display = 'none';
-
-  const scrollY = window.scrollY;
-  try {
-    const cardEl  = document.getElementById('share-card');
-    const canvas  = await html2canvas(cardEl, { backgroundColor: '#1a1a2e', scale: 2, useCORS: true });
-    const blob    = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-    const fileName = `founder-quest_${(S.nickname || main.name).replace(/[^\w\-぀-ヿ一-鿿]/g, '')}_${main.id}.png`;
-    const file     = new File([blob], fileName, { type: 'image/png' });
-
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({
-          files: [file],
-          title: 'Founder Quest 診断結果',
-          text: `私の起業家タイプは「${main.name}」でした！ #FounderQuest #起業家RPG診断`
-        });
-        btn.textContent = originalLabel;
-        btn.disabled = false;
-        return;
-      } catch (shareErr) {
-        // ユーザーがシェアをキャンセルした場合はダウンロードにフォールバック
-      }
-    }
-
-    const url = URL.createObjectURL(blob);
-    const a   = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showImageMsg('✅ 画像を保存しました！', '#4ade80');
-  } catch (err) {
-    console.error(err);
-    showImageMsg('⚠️ 画像の生成に失敗しました。もう一度お試しください。', '#f87171');
-  } finally {
-    window.scrollTo(0, scrollY);
-    btn.textContent = originalLabel;
-    btn.disabled = false;
-  }
-}
-
-// ========== マイルーム ==========
-function renderRoom() {
-  const r = S.result; if (!r) return;
-  const main = CHARACTERS[r.mainCharacter];
-  document.getElementById('room-nickname').textContent    = S.nickname;
-  document.getElementById('room-char-emoji').textContent  = main.emoji;
-  document.getElementById('room-char-name').textContent   = main.name;
-  document.getElementById('room-char-type').textContent   = main.entrepreneurType;
-  document.getElementById('room-title').textContent       = main.title;
-  document.getElementById('room-quest-text').textContent  = main.firstQuest;
-}
-
-function showCharMessage() {
-  const r = S.result; if (!r) return;
-  const main   = CHARACTERS[r.mainCharacter];
-  const bubble = document.getElementById('room-message-bubble');
-  document.getElementById('room-message-text').textContent = main.roomMessage;
-  bubble.style.display = 'block';
-  setTimeout(() => bubble.style.display = 'none', 3000);
-}
-
-// ========== リセット ==========
-function resetAndStart() {
-  if (!confirm('診断結果がリセットされます。もう一度診断しますか？')) return;
-  S = { nickname:'', stage:null, interests:[], currentQ:0, answers:[], result:null };
-  localStorage.removeItem('fq_state');
-  document.getElementById('nickname-input').value = '';
-  document.querySelectorAll('#stage-options button').forEach(b => b.classList.remove('selected'));
-  document.querySelectorAll('.interest-chip').forEach(b => b.classList.remove('selected'));
-  goTo('top');
-}
-
-// ========== 起動 ==========
-document.addEventListener('DOMContentLoaded', () => {
-  createStars();
-
-  if (loadState() && S.result) {
-    const main  = CHARACTERS[S.result.mainCharacter];
-    const toast = document.createElement('div');
-    toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(15,12,41,0.96);border:1px solid rgba(246,211,101,0.4);border-radius:16px;padding:16px 20px;text-align:center;max-width:310px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);';
-    toast.innerHTML = `
-      <div style="font-size:2rem;margin-bottom:6px">${main ? main.emoji : '⚔️'}</div>
-      <p style="color:rgba(246,211,101,0.9);font-size:0.84rem;font-weight:700;margin-bottom:3px">前回の診断：${main ? main.name : ''}タイプ</p>
-      <p style="color:rgba(255,255,255,0.4);font-size:0.75rem;margin-bottom:10px">保存された結果が見つかりました</p>
-      <div style="display:flex;gap:8px">
-        <button onclick="goTo('reveal');this.closest('[style]').remove()" style="flex:1;background:linear-gradient(135deg,#f6d365,#fda085);color:#1a1a2e;font-weight:700;border:none;border-radius:20px;padding:8px;font-size:0.8rem;cursor:pointer">結果を見る</button>
-        <button onclick="this.closest('[style]').remove()" style="flex:1;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.2);border-radius:20px;padding:8px;font-size:0.8rem;cursor:pointer">閉じる</button>
-      </div>`;
-    document.body.appendChild(toast);
-  }
-
-  // ニックネーム入力フィードバック
-  document.getElementById('nickname-input').addEventListener('input', function() {
-    this.style.borderColor = this.value.trim() ? 'rgba(246,211,101,0.5)' : 'rgba(255,255,255,0.18)';
-  });
-});
-</script>
+<script src="gec-app.js"></script>
 </body>
 </html>

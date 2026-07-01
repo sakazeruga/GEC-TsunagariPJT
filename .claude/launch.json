@@ -4,8 +4,9 @@
     {
       "name": "founder-quest",
       "runtimeExecutable": "C:\\Users\\sakaz\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
-      "runtimeArgs": ["-m", "http.server", "8843", "--directory", "docs"],
-      "port": 8843
+      "runtimeArgs": ["-c", "import http.server,socketserver,os,functools;h=functools.partial(http.server.SimpleHTTPRequestHandler, directory='docs');socketserver.TCPServer.allow_reuse_address=True;s=socketserver.TCPServer(('',int(os.environ.get('PORT','8843'))),h);s.serve_forever()"],
+      "port": 8843,
+      "autoPort": true
     }
   ]
 }
