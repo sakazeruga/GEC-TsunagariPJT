@@ -1,4 +1,5 @@
 docs/config.js
+.claude/scheduled_tasks.lock
 
 # 企画・議事録系の下書きドキュメント（ローカル参照用、リポジトリには含めない）
 /繋がりPJT　説明資料.pptx

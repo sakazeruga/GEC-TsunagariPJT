@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Founder Quest - 診断データ一覧</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', 'Hiragino Sans', sans-serif; background:#0f1117; color:#e6e6e6; }
+    table { border-collapse: collapse; }
+    th, td { border: 1px solid #2a2d38; padding: 8px 10px; vertical-align: top; }
+    th { background:#1a1d29; position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+    tr:nth-child(even) td { background:#151822; }
+    tr:hover td { background:#20263a; }
+    .param-pill { display:inline-block; font-size:11px; padding:1px 6px; margin:1px; border-radius:10px; background:#26304a; white-space:nowrap; }
+    .free-text { max-width: 260px; white-space: pre-wrap; font-size: 12px; color:#c8c8c8; }
+  </style>
+</head>
+<body>
+
+<!-- ===== パスワードゲート ===== -->
+<div id="gate" class="min-h-screen flex items-center justify-center px-4">
+  <div class="bg-[#1a1d29] border border-[#2a2d38] rounded-xl p-8 w-full max-w-sm text-center">
+    <h1 class="text-lg font-bold mb-4">🔐 診断データ一覧</h1>
+    <input id="gate-pass" type="password" placeholder="パスワード" class="w-full bg-[#0f1117] border border-[#2a2d38] rounded-lg px-4 py-2 mb-3 text-white outline-none focus:border-yellow-500">
+    <button onclick="tryUnlock()" class="w-full bg-yellow-500 text-black font-bold rounded-lg py-2 hover:bg-yellow-400">開く</button>
+    <p id="gate-error" class="text-red-400 text-xs mt-3 hidden">パスワードが違います</p>
+  </div>
+</div>
+
+<!-- ===== 一覧本体 ===== -->
+<div id="app" class="hidden p-4 md:p-6">
+  <div class="flex flex-wrap items-center gap-3 mb-4">
+    <h1 class="text-xl font-bold">🗂 Founder Quest 診断データ一覧</h1>
+    <span id="count" class="text-sm text-gray-400"></span>
+    <input id="search" type="text" placeholder="ニックネームで検索..." class="ml-auto bg-[#1a1d29] border border-[#2a2d38] rounded-lg px-3 py-1.5 text-sm outline-none focus:border-yellow-500" oninput="renderTable()">
+    <button onclick="loadData()" class="bg-[#1a1d29] border border-[#2a2d38] rounded-lg px-3 py-1.5 text-sm hover:bg-[#20263a]">🔄 再読込</button>
+  </div>
+
+  <div id="status" class="text-sm text-gray-400 mb-3"></div>
+
+  <div class="overflow-auto" style="max-height: 82vh;">
+    <table class="w-full text-sm">
+      <thead>
+        <tr>
+          <th>日時</th>
+          <th>ニックネーム</th>
+          <th>フェーズ</th>
+          <th>関心テーマ</th>
+          <th>メインキャラ</th>
+          <th>サブキャラ</th>
+          <th>Hybrid</th>
+          <th>8パラメータ</th>
+          <th>自由記述</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const STAGE_LABELS = {
+  interested: '興味あり', preparing: '準備中', side: '副業・個人活動',
+  founded: '起業済み', corporate: '新規事業'
+};
+const PARAM_ORDER = ['VISION','ACTION','EMPATHY','ANALYSIS','CREATIVE','RISK','TEAM','PERSIST'];
+
+let allRows = [];
+let sbClient = null;
+
+function tryUnlock() {
+  const val = document.getElementById('gate-pass').value;
+  if (val === 'globis') {
+    document.getElementById('gate').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    initClientAndLoad();
+  } else {
+    document.getElementById('gate-error').classList.remove('hidden');
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('gate-pass').addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+});
+
+function initClientAndLoad() {
+  if (typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined' || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY') {
+    document.getElementById('status').textContent = '⚠️ config.js が見つからないか未設定です。config.example.js をコピーして値を設定してください。';
+    return;
+  }
+  sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  loadData();
+}
+
+async function loadData() {
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = '読み込み中...';
+  const { data, error } = await sbClient
+    .from('diagnosis_results')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1000);
+
+  if (error) {
+    statusEl.textContent = '⚠️ 取得エラー: ' + error.message;
+    return;
+  }
+  allRows = data || [];
+  statusEl.textContent = '';
+  renderTable();
+}
+
+function renderTable() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const rows = q ? allRows.filter(r => (r.nickname || '').toLowerCase().includes(q)) : allRows;
+  document.getElementById('count').textContent = `全 ${allRows.length} 件中 ${rows.length} 件表示`;
+
+  document.getElementById('table-body').innerHTML = rows.map(r => {
+    const dt = r.created_at ? new Date(r.created_at).toLocaleString('ja-JP') : '';
+    const interests = Array.isArray(r.interests) ? r.interests.join(', ') : '';
+    const params = PARAM_ORDER.map(k => `<span class="param-pill">${k}:${(r.parameter_scores || {})[k] ?? '-'}</span>`).join('');
+    const freeText = r.free_text_answers && typeof r.free_text_answers === 'object'
+      ? Object.entries(r.free_text_answers).filter(([,v]) => v).map(([k,v]) => `${k}: ${v}`).join('\n')
+      : '';
+
+    return `<tr>
+      <td class="whitespace-nowrap">${dt}</td>
+      <td>${r.nickname || ''}</td>
+      <td class="whitespace-nowrap">${STAGE_LABELS[r.stage] || r.stage || ''}</td>
+      <td>${interests}</td>
+      <td class="whitespace-nowrap">${r.main_character || ''}</td>
+      <td class="whitespace-nowrap">${r.sub_character || ''}</td>
+      <td>${r.is_hybrid ? '✨' : ''}</td>
+      <td>${params}</td>
+      <td class="free-text">${freeText}</td>
+    </tr>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
