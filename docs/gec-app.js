@@ -367,9 +367,43 @@ const PORTRAIT_PROMPTS = {
   summoner: 'a mystical fantasy RPG summoner in teal-and-cyan robes, surrounded by softly glowing spirit orbs, warm welcoming expression, ethereal teal lighting'
 };
 
-function buildPortraitPrompt(main) {
+// 8パラメータそれぞれの見た目上のニュアンス。回答で高かったパラメータを
+// 上位2つ選んで演出に反映し、同じキャラでも人によって見た目に差が出るようにする
+const PARAM_VISUAL_HINTS = {
+  VISION: 'gazing toward a distant glowing horizon',
+  ACTION: 'captured mid-motion in a dynamic action pose',
+  EMPATHY: 'with a warm, gentle, compassionate expression',
+  ANALYSIS: 'surrounded by floating glowing data charts and diagrams',
+  CREATIVE: 'surrounded by swirling magical sparks and abstract shapes',
+  RISK: 'standing fearlessly at a cliff edge in dramatic wind',
+  TEAM: 'flanked by faint silhouettes of loyal allies',
+  PERSIST: 'weathered but unbroken, standing firm despite battle scars'
+};
+
+function topParameters(scores, n) {
+  return Object.entries(scores).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+}
+
+function buildPortraitPrompt(main, result) {
   const base = PORTRAIT_PROMPTS[main.id] || `a fantasy RPG character embodying ${main.entrepreneurType}`;
-  return `${base}, bust-up portrait, detailed fantasy game concept art, digital painting, highly detailed, no text, no watermark, no logo, no signature`;
+  const hints = topParameters(result.parameterScores, 2).map(p => PARAM_VISUAL_HINTS[p]).filter(Boolean);
+  const extra = hints.length ? `, ${hints.join(', ')}` : '';
+  return `${base}${extra}, bust-up portrait, detailed fantasy game concept art, digital painting, highly detailed, no text, no watermark, no logo, no signature`;
+}
+
+// 回答内容から決定的なハッシュ値を作る（同じ人が初めて生成する分には毎回同じ絵になり、
+// 全く同じ回答でない限り他の人とは異なるシードになる「非重複因子」として使う）
+function hashStringToInt(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (Math.imul(31, hash) + str.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function computeProfileSeed(result, nickname) {
+  const key = `${nickname}|${JSON.stringify(result.parameterScores)}|${result.mainCharacter}|${result.subCharacter}`;
+  return hashStringToInt(key) % 1000000;
 }
 
 async function generateCharacterImage() {
@@ -377,6 +411,7 @@ async function generateCharacterImage() {
   const main   = CHARACTERS[r.mainCharacter];
   const btn    = document.getElementById('detail-portrait-btn');
   const status = document.getElementById('detail-portrait-status');
+  const isRegenerate = !!S.characterImage;
 
   const originalLabel = btn.textContent;
   btn.disabled = true;
@@ -384,8 +419,9 @@ async function generateCharacterImage() {
   status.textContent = '';
 
   try {
-    const prompt = buildPortraitPrompt(main);
-    const seed = Math.floor(Math.random() * 1000000);
+    const prompt = buildPortraitPrompt(main, r);
+    // 初回は回答内容から決まるシード、再生成のたびにランダムなシードで変化を出す
+    const seed = isRegenerate ? Math.floor(Math.random() * 1000000) : computeProfileSeed(r, S.nickname);
     const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&seed=${seed}&nologo=true`;
 
     const res = await fetch(url);
@@ -407,6 +443,54 @@ async function generateCharacterImage() {
     btn.textContent = originalLabel;
   } finally {
     btn.disabled = false;
+  }
+}
+
+// ===== ポートレート画像のアップロード差し替え =====
+function resizeImageFile(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width  = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width  = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handlePortraitUpload(event) {
+  const file = event.target.files[0];
+  event.target.value = ''; // 同じファイルを選び直せるようにリセット
+  if (!file) return;
+
+  const status = document.getElementById('detail-portrait-status');
+  if (!file.type.startsWith('image/')) {
+    status.textContent = '⚠️ 画像ファイルを選択してください';
+    return;
+  }
+
+  try {
+    S.characterImage = await resizeImageFile(file, 640);
+    saveState();
+    renderPortraitState();
+  } catch (e) {
+    console.error('handlePortraitUpload failed:', e);
+    status.textContent = '⚠️ 画像の読み込みに失敗しました';
   }
 }
 

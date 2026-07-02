@@ -333,9 +333,13 @@ body{margin:0;padding:0;font-family:'Noto Sans JP',sans-serif;color:#fff;backgro
 <p style="font-size:0.88rem;color:rgba(255,255,255,0.7);margin-top:6px;font-style:italic" id="detail-copy">未来を掲げ、仲間を導く冒険の旗手</p>
 </div>
 <div class="gec-card" style="padding:16px;margin-bottom:16px;text-align:center">
-<img id="detail-portrait-img" class="hidden" style="width:100%;max-width:280px;border-radius:12px;margin:0 auto 10px;display:block" alt="AI生成ポートレート">
+<img id="detail-portrait-img" class="hidden" style="width:100%;max-width:280px;border-radius:12px;margin:0 auto 10px;display:block" alt="ポートレート">
 <div id="detail-portrait-status" style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:10px"></div>
+<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
 <button id="detail-portrait-btn" class="btn-secondary" style="font-size:0.85rem" onclick="generateCharacterImage()">🎨 AIポートレートを生成</button>
+<button class="btn-secondary" style="font-size:0.85rem" onclick="document.getElementById('detail-portrait-upload').click()">📤 画像をアップロード</button>
+</div>
+<input type="file" id="detail-portrait-upload" accept="image/*" class="hidden" onchange="handlePortraitUpload(event)">
 </div>
 <div class="gec-card-blue" style="padding:12px;margin-bottom:16px;text-align:center">
 <span style="font-size:0.82rem;color:#93c5fd"><span id="detail-nickname">???</span>さんの診断結果</span>
