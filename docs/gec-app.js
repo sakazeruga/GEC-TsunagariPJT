@@ -489,11 +489,6 @@ document.addEventListener('DOMContentLoaded', () => {
       <button onclick="goTo('reveal');this.closest('[style]').remove()" style="background:rgba(37,99,235,0.35);color:#fff;font-weight:700;border:none;border-radius:20px;padding:5px 12px;font-size:0.72rem;cursor:pointer;white-space:nowrap">見る</button>
       <button onclick="this.closest('[style]').remove()" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:0.95rem;cursor:pointer;padding:2px 4px;line-height:1">×</button>`;
     document.body.appendChild(toast);
-    setTimeout(() => {
-      if (!toast.isConnected) return;
-      toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 400);
-    }, 5000);
   }
 
   const nicknameInput = document.getElementById('nickname-input');
