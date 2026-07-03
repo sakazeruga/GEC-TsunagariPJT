@@ -103,7 +103,7 @@ async function loadData() {
   try {
     const { data, error } = await sbClient
       .from('diagnosis_results')
-      .select('*')
+      .select('id,device_id,nickname,stage,interests,free_text_answers,parameter_scores,main_character,sub_character,is_hybrid,created_at')
       .order('created_at', { ascending: false })
       .limit(1000);
 
