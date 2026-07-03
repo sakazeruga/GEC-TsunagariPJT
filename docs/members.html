@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>メンバー一覧 - Founder Quest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Barlow:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;padding:0;font-family:'Noto Sans JP',sans-serif;color:#fff;background:#06091a;min-height:100vh}
+.gec-card{background:rgba(255,255,255,0.05);backdrop-filter:blur(10px);border:1px solid rgba(96,165,250,0.15);border-radius:16px}
+.gec-logo{display:flex;align-items:center;gap:10px;justify-content:center;padding:18px 0}
+.gec-logo-mark{display:grid;grid-template-columns:1fr 1fr;gap:3px;width:24px;height:24px}
+.gec-logo-mark span{display:block;background:#fff;border-radius:2px}
+.gec-logo-text{font-family:'Barlow',sans-serif;font-weight:800;font-size:1.2rem;letter-spacing:0.08em;color:#fff;line-height:1}
+.rpg-input{width:100%;background:rgba(255,255,255,0.06);border:1.5px solid rgba(96,165,250,0.25);border-radius:12px;color:#fff;font-family:'Noto Sans JP',sans-serif;font-size:0.95rem;padding:11px 16px}
+.rpg-input:focus{outline:none;border-color:#3b82f6}
+.member-card{text-decoration:none;color:inherit;display:block;transition:transform 0.15s}
+.member-card:hover{transform:translateY(-2px)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="gec-logo"><div class="gec-logo-mark"><span></span><span></span><span></span><span></span></div><div class="gec-logo-text">GEC · FOUNDER QUEST</div></div>
+
+<div style="max-width:720px;margin:0 auto;padding:0 20px 60px">
+  <h1 style="font-size:1.2rem;font-weight:900;text-align:center;margin-bottom:16px">🗺️ メンバー一覧</h1>
+
+  <input id="search" type="text" placeholder="ニックネームで検索..." class="rpg-input" style="margin-bottom:16px" oninput="renderList()">
+
+  <div id="status" style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.9rem;padding:20px 0"></div>
+
+  <div id="grid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));gap:12px"></div>
+</div>
+
+<script>
+const CHARACTER_NAME_MAP = {
+  hero: { name: '勇者', type: 'ビジョン牽引型', emoji: '⚔️' },
+  warrior: { name: '戦士', type: '実行突破型', emoji: '🛡️' },
+  monk: { name: '僧侶', type: '共感支援型', emoji: '🙏' },
+  mage: { name: '魔法使い', type: '創造発明型', emoji: '🔮' },
+  thief: { name: '盗賊', type: '機会発見型', emoji: '🗡️' },
+  merchant: { name: '商人', type: '事業設計型', emoji: '💰' },
+  strategist: { name: '軍師', type: '戦略分析型', emoji: '🧠' },
+  summoner: { name: '召喚士', type: 'チーム形成型', emoji: '✨' }
+};
+
+let allMembers = [];
+
+async function loadMembers() {
+  const statusEl = document.getElementById('status');
+  if (typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined') {
+    statusEl.textContent = '⚠️ config.js が見つからないか未設定です。';
+    return;
+  }
+  statusEl.textContent = '読み込み中...';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  try {
+    const { data, error } = await sb
+      .from('public_profiles')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(300);
+
+    if (error) {
+      statusEl.textContent = '⚠️ 取得エラー: ' + error.message;
+      return;
+    }
+    allMembers = data || [];
+    statusEl.textContent = '';
+    renderList();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = '⚠️ 通信に失敗しました。';
+  }
+}
+
+function renderList() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const rows = q ? allMembers.filter(m => (m.nickname || '').toLowerCase().includes(q)) : allMembers;
+
+  document.getElementById('grid').innerHTML = rows.map(m => {
+    const c = CHARACTER_NAME_MAP[m.main_character] || { name: m.main_character, type: '', emoji: '❓' };
+    const avatar = m.character_image
+      ? `<img src="${m.character_image}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px;margin-bottom:8px" alt="">`
+      : `<div style="font-size:2.4rem;text-align:center;margin-bottom:8px">${c.emoji}</div>`;
+    return `<a class="member-card gec-card" style="padding:12px;text-align:center" href="profile.html?id=${encodeURIComponent(m.id)}">
+      ${avatar}
+      <div style="font-size:0.85rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.nickname || '???'}</div>
+      <div style="font-size:0.7rem;color:rgba(255,255,255,0.45)">${c.name}${m.is_hybrid ? ' ✨' : ''}</div>
+    </a>`;
+  }).join('');
+
+  if (!rows.length) {
+    document.getElementById('grid').innerHTML = `<div style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);font-size:0.85rem;padding:20px 0">該当するメンバーが見つかりません</div>`;
+  }
+}
+
+loadMembers();
+</script>
+</body>
+</html>

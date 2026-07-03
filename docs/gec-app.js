@@ -15,12 +15,12 @@ function getDeviceId() {
 }
 
 async function saveResultToSupabase(result) {
-  if (!supabaseClient) return;
+  if (!supabaseClient) return null;
   try {
     const freeTextAnswers = {};
     S.answers.forEach(a => { if (a && a.type === 'free_text') freeTextAnswers[a.questionId] = a.value; });
 
-    const { error } = await supabaseClient.from('diagnosis_results').insert({
+    const { data, error } = await supabaseClient.from('diagnosis_results').insert({
       device_id: getDeviceId(),
       nickname: S.nickname,
       stage: S.stage,
@@ -30,17 +30,33 @@ async function saveResultToSupabase(result) {
       main_character: result.mainCharacter,
       sub_character: result.subCharacter,
       is_hybrid: result.isHybrid
-    });
-    if (error) console.error('Supabase error:', error);
+    }).select('id').single();
+    if (error) { console.error('Supabase error:', error); return null; }
+    return data.id;
   } catch (e) {
     console.error('Supabase fail:', e);
+    return null;
+  }
+}
+
+// マイページ用のアバター画像だけをSupabaseに同期する（他の項目は更新不可のRLS設定）
+async function syncCharacterImageToSupabase() {
+  if (!supabaseClient || !S.profileId || !S.characterImage) return;
+  try {
+    const { error } = await supabaseClient
+      .from('diagnosis_results')
+      .update({ character_image: S.characterImage })
+      .eq('id', S.profileId);
+    if (error) console.error('character_image sync error:', error);
+  } catch (e) {
+    console.error('character_image sync failed:', e);
   }
 }
 
 // ===== 状態管理 =====
 let S = {
   nickname: '', stage: null, interests: [],
-  currentQ: 0, answers: [], result: null, characterImage: null
+  currentQ: 0, answers: [], result: null, characterImage: null, profileId: null
 };
 
 function saveState() {
@@ -253,7 +269,10 @@ function startAnalyzing() {
   const result = runDiagnosis(valid);
   S.result = result;
   S.characterImage = null;
-  saveResultToSupabase(result);
+  S.profileId = null;
+  saveResultToSupabase(result).then(id => {
+    if (id) { S.profileId = id; saveState(); }
+  });
 
   setTimeout(() => {
     const norm = normalizeScores(result.parameterScores);
@@ -437,6 +456,7 @@ async function generateCharacterImage() {
     S.characterImage = dataUrl;
     saveState();
     renderPortraitState();
+    syncCharacterImageToSupabase();
   } catch (e) {
     console.error('generateCharacterImage failed:', e);
     status.textContent = '⚠️ 画像生成に失敗しました。もう一度お試しください。';
@@ -488,6 +508,7 @@ async function handlePortraitUpload(event) {
     S.characterImage = await resizeImageFile(file, 640);
     saveState();
     renderPortraitState();
+    syncCharacterImageToSupabase();
   } catch (e) {
     console.error('handlePortraitUpload failed:', e);
     status.textContent = '⚠️ 画像の読み込みに失敗しました';
@@ -630,6 +651,17 @@ function renderRoom() {
   document.getElementById('room-char-type').textContent   = main.entrepreneurType;
   document.getElementById('room-title').textContent       = main.title;
   document.getElementById('room-quest-text').textContent  = main.firstQuest;
+
+  const mypageBtn = document.getElementById('room-mypage-btn');
+  if (mypageBtn) mypageBtn.style.opacity = S.profileId ? '1' : '0.5';
+}
+
+function openMyPage() {
+  if (!S.profileId) {
+    alert('マイページの準備中です。少し待ってからもう一度お試しください。');
+    return;
+  }
+  window.open(`profile.html?id=${encodeURIComponent(S.profileId)}`, '_blank');
 }
 
 function showCharMessage() {
@@ -644,7 +676,7 @@ function showCharMessage() {
 // ===== リセット =====
 function resetAndStart() {
   if (!confirm('診断結果がリセットされます。もう一度診断しますか？')) return;
-  S = { nickname:'', stage:null, interests:[], currentQ:0, answers:[], result:null, characterImage:null };
+  S = { nickname:'', stage:null, interests:[], currentQ:0, answers:[], result:null, characterImage:null, profileId:null };
   localStorage.removeItem('fq_state');
   document.getElementById('nickname-input').value = '';
   document.querySelectorAll('#stage-options button').forEach(b => b.classList.remove('selected'));

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>マイページ - Founder Quest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Barlow:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;padding:0;font-family:'Noto Sans JP',sans-serif;color:#fff;background:#06091a;min-height:100vh}
+.gec-card{background:rgba(255,255,255,0.05);backdrop-filter:blur(10px);border:1px solid rgba(96,165,250,0.15);border-radius:16px}
+.gec-card-blue{background:rgba(37,99,235,0.12);border:1px solid rgba(96,165,250,0.3);border-radius:16px}
+.sec-chip{font-size:0.72rem;font-weight:700;letter-spacing:0.12em;color:#60a5fa;background:rgba(37,99,235,0.15);border:1px solid rgba(96,165,250,0.25);border-radius:20px;padding:4px 14px;display:inline-block}
+.status-bar{height:7px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden}
+.status-fill{height:100%;border-radius:4px}
+.btn-primary{display:inline-block;background:linear-gradient(135deg,#1d4ed8,#3b82f6);color:#fff;font-weight:700;font-family:'Noto Sans JP',sans-serif;font-size:1rem;border:none;border-radius:50px;padding:14px 28px;cursor:pointer;text-decoration:none}
+.gec-logo{display:flex;align-items:center;gap:10px;justify-content:center;padding:18px 0}
+.gec-logo-mark{display:grid;grid-template-columns:1fr 1fr;gap:3px;width:24px;height:24px}
+.gec-logo-mark span{display:block;background:#fff;border-radius:2px}
+.gec-logo-text{font-family:'Barlow',sans-serif;font-weight:800;font-size:1.2rem;letter-spacing:0.08em;color:#fff;line-height:1}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="gec-logo"><div class="gec-logo-mark"><span></span><span></span><span></span><span></span></div><div class="gec-logo-text">GEC · FOUNDER QUEST</div></div>
+
+<div style="max-width:440px;margin:0 auto;padding:12px 20px 60px">
+
+  <div id="status" style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.9rem;padding:40px 0"></div>
+
+  <div id="profile-body" class="hidden">
+    <div style="text-align:center;margin-bottom:20px">
+      <img id="profile-avatar-img" class="hidden" style="width:140px;height:140px;object-fit:cover;border-radius:16px;margin:0 auto 10px;display:block" alt="ポートレート">
+      <div id="profile-avatar-emoji" style="font-size:4.5rem;margin-bottom:6px"></div>
+      <h2 style="font-size:1.3rem;font-weight:900;margin-bottom:2px"><span id="profile-nickname">???</span>さん</h2>
+      <div class="sec-chip" style="margin-bottom:10px" id="profile-char-type">-</div>
+      <div style="font-size:1.6rem;font-weight:900" id="profile-char-name">-</div>
+      <div id="profile-hybrid-badge" class="hidden" style="margin-top:8px"><span style="font-size:0.72rem;background:#1d4ed8;color:#fff;padding:4px 14px;border-radius:20px;font-weight:700">✨ ハイブリッドタイプ</span></div>
+    </div>
+
+    <div class="gec-card" style="padding:20px;margin-bottom:20px">
+      <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;color:#60a5fa;margin-bottom:14px">パラメータ</div>
+      <div id="profile-status" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+
+    <div style="text-align:center">
+      <a class="btn-primary" href="index.html">⚔️ 自分も診断してみる</a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const P_COLORS = { VISION:'#60a5fa', ACTION:'#f87171', EMPATHY:'#34d399', ANALYSIS:'#818cf8', CREATIVE:'#a78bfa', RISK:'#fbbf24', TEAM:'#22d3ee', PERSIST:'#fb923c' };
+const PARAM_LABELS = [['VISION','ビジョン力'],['ACTION','実行力'],['EMPATHY','共感力'],['ANALYSIS','分析力'],['CREATIVE','創造力'],['RISK','挑戦力'],['TEAM','巻き込み力'],['PERSIST','継続力']];
+
+function normalizeScore(v) {
+  return Math.min(100, Math.round((v / 25) * 100));
+}
+
+async function loadProfile() {
+  const statusEl = document.getElementById('status');
+  const id = new URLSearchParams(location.search).get('id');
+
+  if (!id) {
+    statusEl.textContent = 'マイページのURLが正しくありません（idパラメータがありません）。';
+    return;
+  }
+  if (typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined') {
+    statusEl.textContent = '⚠️ config.js が見つからないか未設定です。';
+    return;
+  }
+
+  statusEl.textContent = '読み込み中...';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  try {
+    const { data, error } = await sb
+      .from('public_profiles')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !data) {
+      statusEl.textContent = 'このマイページは見つかりませんでした。';
+      return;
+    }
+
+    document.getElementById('profile-nickname').textContent = data.nickname || '???';
+    document.getElementById('profile-char-name').textContent = CHARACTER_NAME_MAP[data.main_character]?.name || data.main_character;
+    document.getElementById('profile-char-type').textContent = CHARACTER_NAME_MAP[data.main_character]?.type || '';
+    document.getElementById('profile-avatar-emoji').textContent = CHARACTER_NAME_MAP[data.main_character]?.emoji || '⚔️';
+    document.getElementById('profile-hybrid-badge').classList.toggle('hidden', !data.is_hybrid);
+
+    if (data.character_image) {
+      document.getElementById('profile-avatar-img').src = data.character_image;
+      document.getElementById('profile-avatar-img').classList.remove('hidden');
+      document.getElementById('profile-avatar-emoji').classList.add('hidden');
+    }
+
+    document.getElementById('profile-status').innerHTML = PARAM_LABELS.map(([K, L]) => {
+      const v = (data.parameter_scores || {})[K] ?? 0;
+      const pct = normalizeScore(v);
+      return `<div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:0.75rem;color:rgba(255,255,255,0.5)">${L}</span>
+          <span style="font-size:0.75rem;font-weight:700;color:${P_COLORS[K]}">${v}</span>
+        </div>
+        <div class="status-bar"><div class="status-fill" style="width:${pct}%;background:${P_COLORS[K]}"></div></div>
+      </div>`;
+    }).join('');
+
+    statusEl.textContent = '';
+    document.getElementById('profile-body').classList.remove('hidden');
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = '⚠️ 読み込みに失敗しました。';
+  }
+}
+
+// characters.js を読み込まずに済むよう、表示に必要な名前だけ最小限で持つ
+const CHARACTER_NAME_MAP = {
+  hero: { name: '勇者', type: 'ビジョン牽引型', emoji: '⚔️' },
+  warrior: { name: '戦士', type: '実行突破型', emoji: '🛡️' },
+  monk: { name: '僧侶', type: '共感支援型', emoji: '🙏' },
+  mage: { name: '魔法使い', type: '創造発明型', emoji: '🔮' },
+  thief: { name: '盗賊', type: '機会発見型', emoji: '🗡️' },
+  merchant: { name: '商人', type: '事業設計型', emoji: '💰' },
+  strategist: { name: '軍師', type: '戦略分析型', emoji: '🧠' },
+  summoner: { name: '召喚士', type: 'チーム形成型', emoji: '✨' }
+};
+
+loadProfile();
+</script>
+</body>
+</html>
